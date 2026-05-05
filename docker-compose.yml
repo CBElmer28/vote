@@ -1,0 +1,198 @@
+version: "3.9"
+
+# ============================================================
+#  VOTESYSTEM — Docker Compose
+#  Fase 1: Infraestructura base
+#
+#  Puertos locales:
+#    MySQL           → 3307  (3306 ocupado por MySQL local de Windows)
+#    MS1 Usuarios    → 5001
+#    MS2 Biométrico  → 5002
+#    MS3 Votación    → 5003
+#    MS4 Análisis    → 5004
+#    MS5 Candidatos  → 5005
+# ============================================================
+
+services:
+
+  # ----------------------------------------------------------
+  # BASE DE DATOS — MySQL 8
+  # ----------------------------------------------------------
+  db:
+    image: mysql:8.0
+    container_name: votesystem_db
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-votesystem}
+      MYSQL_USER: ${MYSQL_USER:-voteuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-votepassword}
+    ports:
+      - "3307:3306"   # 3307 externo → evita conflicto con MySQL local de Windows
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db/init:/docker-entrypoint-initdb.d   # scripts SQL de inicialización
+    networks:
+      - votenet
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ----------------------------------------------------------
+  # MICROSERVICIO 1 — Gestión de Usuarios  (puerto 5001)
+  # ----------------------------------------------------------
+  ms_usuarios:
+    build:
+      context: ./services/ms_usuarios
+      dockerfile: Dockerfile
+    container_name: votesystem_ms_usuarios
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      FLASK_ENV: development
+      FLASK_DEBUG: "1"
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${MYSQL_DATABASE:-votesystem}
+      DB_USER: ${MYSQL_USER:-voteuser}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-votepassword}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-usuarios}
+    volumes:
+      - ./services/ms_usuarios:/app   # hot-reload en desarrollo
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - votenet
+
+  # ----------------------------------------------------------
+  # MICROSERVICIO 2 — Validación Biométrica  (puerto 5002)
+  # ----------------------------------------------------------
+  ms_biometrico:
+    build:
+      context: ./services/ms_biometrico
+      dockerfile: Dockerfile
+    container_name: votesystem_ms_biometrico
+    restart: unless-stopped
+    ports:
+      - "5002:5002"
+    environment:
+      FLASK_ENV: development
+      FLASK_DEBUG: "1"
+      BIOMETRIC_MODE: ${BIOMETRIC_MODE:-mock}
+      AZURE_FACE_API_KEY: ${AZURE_FACE_API_KEY:-YOUR_KEY_HERE}
+      AZURE_FACE_ENDPOINT: ${AZURE_FACE_ENDPOINT:-https://YOUR_RESOURCE.cognitiveservices.azure.com/}
+      FACE_CONFIDENCE_THRESHOLD: ${FACE_CONFIDENCE_THRESHOLD:-0.6}
+      AZURE_FP_API_KEY: ${AZURE_FP_API_KEY:-YOUR_KEY_HERE}
+      AZURE_FP_ENDPOINT: ${AZURE_FP_ENDPOINT:-https://YOUR_RESOURCE.cognitiveservices.azure.com/}
+      FP_CONFIDENCE_THRESHOLD: ${FP_CONFIDENCE_THRESHOLD:-0.7}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-biometrico}
+    volumes:
+      - ./services/ms_biometrico:/app
+    networks:
+      - votenet
+
+  # ----------------------------------------------------------
+  # MICROSERVICIO 3 — Votación  (puerto 5003)
+  # ----------------------------------------------------------
+  ms_votacion:
+    build:
+      context: ./services/ms_votacion
+      dockerfile: Dockerfile
+    container_name: votesystem_ms_votacion
+    restart: unless-stopped
+    ports:
+      - "5003:5003"
+    environment:
+      FLASK_ENV: development
+      FLASK_DEBUG: "1"
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${MYSQL_DATABASE:-votesystem}
+      DB_USER: ${MYSQL_USER:-voteuser}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-votepassword}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-votacion}
+      # URL interna al MS de validación biométrica
+      BIOMETRICO_URL: http://ms_biometrico:5002
+    volumes:
+      - ./services/ms_votacion:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - votenet
+
+  # ----------------------------------------------------------
+  # MICROSERVICIO 4 — Análisis de Datos  (puerto 5004)
+  # ----------------------------------------------------------
+  ms_analisis:
+    build:
+      context: ./services/ms_analisis
+      dockerfile: Dockerfile
+    container_name: votesystem_ms_analisis
+    restart: unless-stopped
+    ports:
+      - "5004:5004"
+    environment:
+      FLASK_ENV: development
+      FLASK_DEBUG: "1"
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${MYSQL_DATABASE:-votesystem}
+      DB_USER: ${MYSQL_USER:-voteuser}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-votepassword}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-analisis}
+    volumes:
+      - ./services/ms_analisis:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - votenet
+
+  # ----------------------------------------------------------
+  # MICROSERVICIO 5 — Candidatos  (puerto 5005)
+  # ----------------------------------------------------------
+  ms_candidatos:
+    build:
+      context: ./services/ms_candidatos
+      dockerfile: Dockerfile
+    container_name: votesystem_ms_candidatos
+    restart: unless-stopped
+    ports:
+      - "5005:5005"
+    environment:
+      FLASK_ENV: development
+      FLASK_DEBUG: "1"
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${MYSQL_DATABASE:-votesystem}
+      DB_USER: ${MYSQL_USER:-voteuser}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-votepassword}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-candidatos}
+    volumes:
+      - ./services/ms_candidatos:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - votenet
+
+# ============================================================
+#  VOLÚMENES
+# ============================================================
+volumes:
+  db_data:
+    driver: local
+
+# ============================================================
+#  REDES
+# ============================================================
+networks:
+  votenet:
+    driver: bridge
