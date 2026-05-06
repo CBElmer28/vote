@@ -8,10 +8,12 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token') || null);
   const [loading, setLoading] = useState(true);
   const [hasVoted, setHasVoted] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Configure axios defaults
   useEffect(() => {
     if (token) {
+      setLoading(true); // Ensure loading is true while we fetch
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       localStorage.setItem('token', token);
       fetchUser();
@@ -28,6 +30,7 @@ export const AuthProvider = ({ children }) => {
       // MS1 - Usuarios
       const res = await axios.get('http://localhost:5001/api/usuarios/auth/me');
       setUser(res.data.data);
+      setIsAdmin(res.data.data.role === 'ADMIN');
       
       // Also check if user has voted via MS3
       const voteRes = await axios.get(`http://localhost:5003/api/votos/user/${res.data.data.id}`);
@@ -40,9 +43,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (dni) => {
+  const login = async (credentials) => {
     try {
-      const res = await axios.post('http://localhost:5001/api/usuarios/auth/login', { dni });
+      const res = await axios.post('http://localhost:5001/api/usuarios/auth/login', credentials);
       setToken(res.data.token);
       return { success: true };
     } catch (err) {
@@ -56,10 +59,11 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setToken(null);
     setHasVoted(false);
+    setIsAdmin(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, hasVoted, login, logout, fetchUser }}>
+    <AuthContext.Provider value={{ user, token, loading, hasVoted, isAdmin, login, logout, fetchUser }}>
       {children}
     </AuthContext.Provider>
   );

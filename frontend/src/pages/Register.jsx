@@ -4,12 +4,13 @@ import axios from 'axios';
 import { GlassCard } from '../components/GlassCard';
 import { UserPlus } from 'lucide-react';
 
-export default function Register() {
+export default function Register({ inDashboard = false }) {
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
     dni: '',
     email: '',
+    role_id: 2
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -35,8 +36,37 @@ export default function Register() {
   };
 
   return (
-    <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '2rem 0' }}>
-      <div className="animate-fade-in" style={{ width: '100%', maxWidth: '500px' }}>
+    <div style={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      width: inDashboard ? '100%' : '100vw',
+      minHeight: inDashboard ? '100%' : '100vh',
+      backgroundImage: inDashboard ? 'none' : 'url(/bg_voting_geometric.png)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed',
+      position: inDashboard ? 'relative' : 'absolute',
+      top: 0,
+      left: 0,
+      zIndex: 0,
+      padding: inDashboard ? '2rem' : 0
+    }}>
+      {/* Overlay for blur and dimming */}
+      {!inDashboard && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backdropFilter: 'blur(8px)',
+          backgroundColor: 'rgba(255,255,255,0.4)',
+          zIndex: 1
+        }} />
+      )}
+
+      <div className="animate-fade-in" style={{ width: '100%', maxWidth: '500px', position: 'relative', zIndex: 2, padding: inDashboard ? 0 : '2rem' }}>
         <GlassCard>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>Registro de Votante</h2>
@@ -74,11 +104,13 @@ export default function Register() {
             </button>
           </form>
 
-          <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.9rem' }}>
-            <p style={{ color: 'var(--text-muted)' }}>
-              ¿Ya tienes cuenta? <Link to="/" style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 'bold' }}>Inicia sesión aquí</Link>
-            </p>
-          </div>
+          {!inDashboard && (
+            <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.9rem' }}>
+              <p style={{ color: 'var(--text-muted)' }}>
+                ¿Ya tienes cuenta? <Link to="/" style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 'bold' }}>Inicia sesión aquí</Link>
+              </p>
+            </div>
+          )}
         </GlassCard>
       </div>
     </div>

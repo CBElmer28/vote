@@ -80,10 +80,13 @@ def login():
     JSON body: { "dni": "12345678" }
     """
     data = request.get_json()
-    if not data or "dni" not in data:
-        return jsonify({"error": "DNI is required"}), 400
+    if not data:
+        return jsonify({"error": "Data is required"}), 400
 
-    user, error = service.authenticate_user(data["dni"])
+    user, error = service.authenticate_user(
+        dni=data.get("dni"), 
+        email=data.get("email")
+    )
     if error:
         return jsonify({"error": error}), 401
 

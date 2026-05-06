@@ -114,8 +114,8 @@ export default function Results() {
                 <img 
                   src={`data:image/png;base64,${charts.bar}`} 
                   alt="Bar Chart" 
-                  style={{ width: '100%', borderRadius: '8px', filter: 'invert(0.9) hue-rotate(180deg)' }} 
-                  /* The invert filter makes the matplotlib white bg dark mode friendly roughly */
+                  className="chart-image"
+                  style={{ width: '100%', borderRadius: '8px' }} 
                 />
               ) : (
                 <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No hay datos suficientes</p>
@@ -128,7 +128,8 @@ export default function Results() {
                 <img 
                   src={`data:image/png;base64,${charts.pie}`} 
                   alt="Pie Chart" 
-                  style={{ width: '100%', borderRadius: '8px', filter: 'invert(0.9) hue-rotate(180deg)' }} 
+                  className="chart-image"
+                  style={{ width: '100%', borderRadius: '8px' }} 
                 />
               ) : (
                 <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No hay datos suficientes</p>

@@ -14,6 +14,9 @@ class UserRepository:
     def get_by_dni(self, dni: str):
         return User.query.filter_by(dni=dni).first()
 
+    def get_by_email(self, email: str):
+        return User.query.filter_by(email=email).first()
+
     def create(self, data: dict) -> User:
         user = User(**data)
         db.session.add(user)

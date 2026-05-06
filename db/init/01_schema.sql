@@ -7,6 +7,15 @@ CREATE DATABASE IF NOT EXISTS votesystem CHARACTER SET utf8mb4 COLLATE utf8mb4_u
 USE votesystem;
 
 -- -------------------------------------------------------
+-- roles
+-- -------------------------------------------------------
+CREATE TABLE IF NOT EXISTS roles (
+    id              INT           AUTO_INCREMENT PRIMARY KEY,
+    name            VARCHAR(50)   NOT NULL UNIQUE,
+    description     VARCHAR(255)
+) ENGINE=InnoDB;
+
+-- -------------------------------------------------------
 -- users
 -- -------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
@@ -18,9 +27,11 @@ CREATE TABLE IF NOT EXISTS users (
     photo_url       VARCHAR(255)  COMMENT 'Reference photo for face verification',
     fingerprint_hash VARCHAR(255) COMMENT 'Stored fingerprint template/hash for biometric match',
     is_active       BOOLEAN       NOT NULL DEFAULT TRUE,
+    role_id         INT           NOT NULL,
     created_at      DATETIME      DEFAULT CURRENT_TIMESTAMP,
     updated_at      DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_dni (dni)
+    INDEX idx_dni (dni),
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
 -- -------------------------------------------------------
@@ -64,3 +75,14 @@ INSERT IGNORE INTO candidates (full_name, party) VALUES
     ('Ana García',    'Partido Progresista'),
     ('Luis Morales',  'Partido Nacional'),
     ('Sara Jiménez',  'Partido Verde');
+
+-- -------------------------------------------------------
+-- Seed data: roles and users
+-- -------------------------------------------------------
+INSERT IGNORE INTO roles (id, name, description) VALUES 
+(1, 'ADMIN', 'Administrator full access'),
+(2, 'VOTER', 'Standard voter');
+
+INSERT IGNORE INTO users (first_name, last_name, dni, email, role_id) VALUES 
+('Admin', 'System', '00000000', 'admin@votesystem.local', 1),
+('Test', 'User', '11111111', 'test@votesystem.local', 2);

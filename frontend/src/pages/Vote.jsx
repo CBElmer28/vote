@@ -254,17 +254,18 @@ function StepIndicator({ current, target, label, icon }) {
         width: '36px', height: '36px', 
         borderRadius: '50%', 
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: isPast ? 'var(--success)' : isCurrent ? 'var(--primary)' : 'var(--surface-hover)',
+        backgroundColor: isPast ? 'var(--success)' : isCurrent ? 'var(--primary)' : 'var(--bg-color)',
         color: isPast || isCurrent ? 'white' : 'var(--text-muted)',
-        border: `2px solid ${isCurrent ? 'var(--primary)' : 'transparent'}`,
+        border: `2px solid ${isPast ? 'var(--success)' : isCurrent ? 'var(--primary)' : 'var(--surface-border)'}`,
+        boxShadow: isCurrent ? '0 0 10px var(--primary-glow)' : 'none',
         transition: 'all 0.3s ease'
       }}>
         {icon}
       </div>
       <span style={{ 
         fontSize: '0.85rem', 
-        fontWeight: isCurrent ? 'bold' : 'normal',
-        color: isCurrent ? 'var(--text-main)' : 'var(--text-muted)' 
+        fontWeight: isCurrent ? '700' : '500',
+        color: isCurrent ? 'var(--primary)' : 'var(--text-muted)' 
       }}>
         {label}
       </span>

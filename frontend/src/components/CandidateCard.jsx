@@ -44,11 +44,13 @@ export const CandidateCard = ({ candidate, isSelected, onSelect }) => {
         
         <h3 style={{ margin: '0 0 8px 0', textAlign: 'center' }}>{candidate.full_name}</h3>
         <span style={{ 
-          backgroundColor: 'rgba(255,255,255,0.1)', 
+          backgroundColor: 'var(--bg-color)', 
+          border: '1px solid var(--surface-border)',
           padding: '4px 12px', 
           borderRadius: '12px',
           fontSize: '0.85rem',
-          color: 'var(--text-muted)'
+          color: 'var(--text-muted)',
+          fontWeight: 600
         }}>
           {candidate.party || 'Independiente'}
         </span>

@@ -6,6 +6,7 @@ Token payload structure:
         "sub":   <user_id>,
         "dni":   <dni>,
         "name":  <first_name + last_name>,
+        "role":  <role_name>,
         "iat":   <issued_at>,
         "exp":   <expiry>
     }
@@ -26,6 +27,7 @@ def generate_token(user: dict, expires_hours: int = 8) -> str:
         "sub":  user["id"],
         "dni":  user["dni"],
         "name": f"{user['first_name']} {user['last_name']}",
+        "role": user.get("role", "VOTER"),
         "iat":  datetime.datetime.utcnow(),
         "exp":  datetime.datetime.utcnow() + datetime.timedelta(hours=expires_hours),
     }

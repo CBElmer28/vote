@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Vote from './pages/Vote';
 import Results from './pages/Results';
+import AdminDashboard from './pages/AdminDashboard';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -17,13 +18,22 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+// Admin Route Component
+const AdminRoute = ({ children }) => {
+  const { user, isAdmin, loading } = useAuth();
+  
+  if (loading) return <div className="container animate-fade-in" style={{ textAlign: 'center', marginTop: '5rem' }}><h3>Cargando portal...</h3></div>;
+  if (!user || !isAdmin) return <Navigate to="/admin/login" replace />;
+  
+  return children;
+};
+
 function App() {
   return (
     <AuthProvider>
       <Router>
         <Routes>
           <Route path="/" element={<Login />} />
-          <Route path="/register" element={<Register />} />
           <Route 
             path="/vote" 
             element={
@@ -33,6 +43,17 @@ function App() {
             } 
           />
           <Route path="/results" element={<Results />} />
+          
+          {/* Admin Routes */}
+          <Route path="/admin/login" element={<Login isAdminLogin={true} />} />
+          <Route 
+            path="/admin/dashboard" 
+            element={
+              <AdminRoute>
+                <AdminDashboard />
+              </AdminRoute>
+            } 
+          />
         </Routes>
       </Router>
     </AuthProvider>

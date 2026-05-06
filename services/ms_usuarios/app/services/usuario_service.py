@@ -73,15 +73,20 @@ class UserService:
     # ------------------------------------------------------------------ #
     #  Auth
     # ------------------------------------------------------------------ #
-    def authenticate_user(self, dni: str):
-        """Authenticates a user via DNI (no password required for this demo, 
-        real security will be biometric in MS3)"""
-        if not dni:
-            return None, "DNI is required"
+    def authenticate_user(self, dni: str = None, email: str = None):
+        """Authenticates a user via DNI or Email (for admins)"""
+        if not dni and not email:
+            return None, "Credentials (DNI or Email) are required"
         
-        user = self.repo.get_by_dni(dni)
+        if email:
+            user = self.repo.get_by_email(email)
+            identifier = email
+        else:
+            user = self.repo.get_by_dni(dni)
+            identifier = dni
+
         if not user:
-            return None, "Invalid DNI: User not found"
+            return None, f"Invalid credentials: {identifier} not found"
         
         if not user.is_active:
             return None, "User account is disabled"
