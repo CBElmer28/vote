@@ -68,6 +68,10 @@ class CandidateService:
         if not candidate:
             return None, "Candidate not found"
 
+        # Capture old images for cleanup if they are about to be replaced
+        old_photo = candidate.photo_url
+        old_party = candidate.party_symbol_url
+
         # If renaming, check no other candidate uses that name
         if "full_name" in data:
             existing = self.repo.get_by_name(data["full_name"])
@@ -80,6 +84,12 @@ class CandidateService:
         # Process any base64 images
         clean_data = self._process_images(clean_data)
 
+        # Cleanup old files if new ones were successfully saved
+        if clean_data.get("photo_url") and clean_data["photo_url"] != old_photo:
+            ImageHandler.delete_image(old_photo)
+        if clean_data.get("party_symbol_url") and clean_data["party_symbol_url"] != old_party:
+            ImageHandler.delete_image(old_party)
+
         updated = self.repo.update(candidate, clean_data)
         return updated.to_dict(), None
 
@@ -87,6 +97,11 @@ class CandidateService:
         candidate = self.repo.get_by_id(candidate_id)
         if not candidate:
             return False, "Candidate not found"
+        
+        # Cleanup physical files before deleting DB record
+        ImageHandler.delete_image(candidate.photo_url)
+        ImageHandler.delete_image(candidate.party_symbol_url)
+        
         self.repo.delete(candidate)
         return True, None
 

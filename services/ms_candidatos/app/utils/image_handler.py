@@ -9,6 +9,32 @@ class ImageHandler:
     """Utility to handle image processing and storage."""
     
     @staticmethod
+    def delete_image(url: str):
+        """
+        Deletes a physical image file from the static folder given its public URL.
+        """
+        if not url or not url.startswith("/api/candidatos/static/"):
+            return
+        
+        try:
+            # Extract folder and filename from URL: /api/candidatos/static/uploads/filename.webp
+            parts = url.split("/")
+            if len(parts) < 3:
+                return
+            
+            filename = parts[-1]
+            folder = parts[-2]
+            
+            static_dir = os.path.join(current_app.root_path, "static", folder)
+            filepath = os.path.join(static_dir, filename)
+            
+            if os.path.exists(filepath):
+                os.remove(filepath)
+                print(f"File deleted: {filepath}")
+        except Exception as e:
+            print(f"Error deleting image: {e}")
+
+    @staticmethod
     def save_base64_as_webp(base64_str: str, folder: str = "uploads") -> str:
         """
         Converts a base64 image string to WEBP format and saves it to the static folder.
