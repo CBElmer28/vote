@@ -109,9 +109,11 @@ services:
       AZURE_FACE_API_KEY: ${AZURE_FACE_API_KEY:-YOUR_KEY_HERE}
       AZURE_FACE_ENDPOINT: ${AZURE_FACE_ENDPOINT:-https://YOUR_RESOURCE.cognitiveservices.azure.com/}
       FACE_CONFIDENCE_THRESHOLD: ${FACE_CONFIDENCE_THRESHOLD:-0.6}
-      AZURE_FP_API_KEY: ${AZURE_FP_API_KEY:-YOUR_KEY_HERE}
       AZURE_FP_ENDPOINT: ${AZURE_FP_ENDPOINT:-https://YOUR_RESOURCE.cognitiveservices.azure.com/}
       FP_CONFIDENCE_THRESHOLD: ${FP_CONFIDENCE_THRESHOLD:-0.7}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
       SECRET_KEY: ${SECRET_KEY:-dev-secret-biometrico}
     volumes:
       - ./services/ms_biometrico:/app
