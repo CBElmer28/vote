@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import Webcam from 'react-webcam';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { GlassCard } from '../components/GlassCard';
 import { CandidateCard } from '../components/CandidateCard';
-import { Camera, Fingerprint, CheckCircle, ChevronRight, Check } from 'lucide-react';
+import { Camera, Fingerprint, CheckCircle, ChevronRight, Check, AlertCircle, User, Loader2 } from 'lucide-react';
 
 export default function Vote() {
   const { user, hasVoted } = useAuth();
@@ -15,7 +14,6 @@ export default function Vote() {
   const [step, setStep] = useState(1);
   const [candidates, setCandidates] = useState([]);
   
-  // Data states
   const [photoBlob, setPhotoBlob] = useState(null);
   const [photoUrl, setPhotoUrl] = useState(null);
   const [fingerprintFile, setFingerprintFile] = useState(null);
@@ -25,20 +23,15 @@ export default function Vote() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (hasVoted) {
-      navigate('/results');
-    }
+    if (hasVoted) navigate('/results');
   }, [hasVoted, navigate]);
 
   useEffect(() => {
-    // Fetch candidates
     const fetchCandidates = async () => {
       try {
-        const res = await axios.get('http://localhost:5005/api/candidates/?active=true');
+        const res = await axios.get('http://localhost/api/candidatos/?active=true');
         setCandidates(res.data.data);
-      } catch (err) {
-        console.error("Failed to load candidates", err);
-      }
+      } catch (err) { console.error("Failed to load candidates", err); }
     };
     fetchCandidates();
   }, []);
@@ -47,16 +40,12 @@ export default function Vote() {
     const imageSrc = webcamRef.current.getScreenshot();
     if (imageSrc) {
       setPhotoUrl(imageSrc);
-      fetch(imageSrc)
-        .then(res => res.blob())
-        .then(blob => setPhotoBlob(blob));
+      fetch(imageSrc).then(res => res.blob()).then(blob => setPhotoBlob(blob));
     }
   }, [webcamRef]);
 
   const handleFingerprintUpload = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setFingerprintFile(e.target.files[0]);
-    }
+    if (e.target.files && e.target.files[0]) setFingerprintFile(e.target.files[0]);
   };
 
   const submitVote = async () => {
@@ -68,205 +57,191 @@ export default function Vote() {
       const formData = new FormData();
       formData.append('user_id', user.id);
       formData.append('candidate_id', selectedCandidate.id);
-      // Mock data for reference photo and hash that the backend expects
       formData.append('reference_url', 'mock_url_placeholder');
       formData.append('stored_hash', 'valid_hash_placeholder'); 
-      
-      // The current captures
       formData.append('face_photo', photoBlob, 'face.jpg');
       formData.append('fingerprint_sample', fingerprintFile, 'fingerprint.bin');
 
-      const res = await axios.post('http://localhost:5003/api/votos/', formData, {
+      const res = await axios.post('http://localhost/api/votacion/', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      if (res.status === 201) {
-        navigate('/results', { state: { success: true } });
-      }
+      if (res.status === 201) navigate('/results', { state: { success: true } });
     } catch (err) {
       setError(err.response?.data?.error || 'Error al emitir el voto. Intente nuevamente.');
       setIsSubmitting(false);
     }
   };
 
-  if (hasVoted) return null; // Wait for redirect
+  if (hasVoted) return null;
 
   return (
-    <div className="container animate-fade-in" style={{ padding: '2rem 0' }}>
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <h1 className="gradient-text">Emisión de Voto</h1>
-        <p style={{ color: 'var(--text-muted)' }}>Votante: {user?.first_name} {user?.last_name}</p>
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <StepIndicator current={step} target={1} label="Foto" icon={<Camera size={16} />} />
-          <div style={{ width: '40px', height: '2px', background: step > 1 ? 'var(--primary)' : 'var(--surface-border)' }} />
-          <StepIndicator current={step} target={2} label="Huella" icon={<Fingerprint size={16} />} />
-          <div style={{ width: '40px', height: '2px', background: step > 2 ? 'var(--primary)' : 'var(--surface-border)' }} />
-          <StepIndicator current={step} target={3} label="Selección" icon={<CheckCircle size={16} />} />
-        </div>
-      </div>
-
-      {error && (
-        <div style={{ maxWidth: '600px', margin: '0 auto 1.5rem', padding: '1rem', backgroundColor: 'rgba(239, 68, 68, 0.2)', color: 'var(--danger)', borderRadius: '8px', textAlign: 'center' }}>
-          {error}
-        </div>
-      )}
-
-      {/* STEP 1: FACE PHOTO */}
-      {step === 1 && (
-        <GlassCard className="animate-fade-in" style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-          <h2 style={{ marginBottom: '1.5rem' }}>1. Verificación Facial</h2>
-          
-          <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--surface-border)', marginBottom: '1.5rem', backgroundColor: '#000' }}>
-            {!photoUrl ? (
-              <Webcam
-                audio={false}
-                ref={webcamRef}
-                screenshotFormat="image/jpeg"
-                videoConstraints={{ facingMode: "user" }}
-                style={{ width: '100%', display: 'block' }}
-              />
-            ) : (
-              <img src={photoUrl} alt="Captured" style={{ width: '100%', display: 'block' }} />
-            )}
+    <div className="min-h-screen bg-bg-main p-8 lg:p-14">
+      <div className="max-w-7xl mx-auto w-full">
+        
+        {/* Header Area */}
+        <div className="text-center mb-14">
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <div className="bg-primary-navy text-white p-2.5 rounded-xl shadow-lg">
+              <CheckCircle size={28} />
+            </div>
+            <h1 className="text-4xl font-black text-text-main m-0 tracking-tight">Emisión de Voto</h1>
           </div>
+          <div className="flex items-center justify-center gap-2 text-text-muted font-bold text-sm uppercase tracking-wider">
+            <User size={16} />
+            <span>Ciudadano: {user?.first_name} {user?.last_name}</span>
+          </div>
+        </div>
 
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-            {!photoUrl ? (
-              <button className="glass-button" onClick={capture}>
-                <Camera size={20} /> Capturar Foto
+        {/* Progress Stepper */}
+        <div className="flex items-center justify-center gap-4 mb-16">
+          <StepIcon active={step === 1} done={step > 1} icon={<Camera size={20} />} label="Identidad Facial" />
+          <div className={`h-0.5 w-16 transition-colors duration-500 ${step > 1 ? 'bg-success-emerald' : 'bg-surface-border'}`} />
+          <StepIcon active={step === 2} done={step > 2} icon={<Fingerprint size={20} />} label="Huella Dactilar" />
+          <div className={`h-0.5 w-16 transition-colors duration-500 ${step > 2 ? 'bg-success-emerald' : 'bg-surface-border'}`} />
+          <StepIcon active={step === 3} done={false} icon={<CheckCircle size={20} />} label="Votación" />
+        </div>
+
+        {error && (
+          <div className="animate-fade-in max-w-2xl mx-auto mb-8 p-4 rounded-xl bg-danger-rose/10 border border-danger-rose/20 text-danger-rose text-sm flex items-center gap-3">
+            <AlertCircle size={20} /> {error}
+          </div>
+        )}
+
+        {/* STEP 1: FACE PHOTO */}
+        {step === 1 && (
+          <div className="animate-fade-in flat-card max-w-2xl mx-auto text-center !p-10">
+            <div className="mb-8">
+              <h2 className="text-2xl font-black text-text-main mb-1">1. Verificación Facial</h2>
+              <p className="text-text-muted">Asegure una buena iluminación antes de capturar</p>
+            </div>
+            
+            <div className="w-full aspect-video rounded-3xl overflow-hidden border-4 border-surface-border mb-10 bg-slate-900 shadow-2xl relative">
+              {!photoUrl ? (
+                <Webcam 
+                  audio={false} 
+                  ref={webcamRef} 
+                  screenshotFormat="image/jpeg" 
+                  className="w-full h-full object-cover scale-x-[-1]" 
+                />
+              ) : (
+                <img src={photoUrl} alt="Captura" className="w-full h-full object-cover scale-x-[-1]" />
+              )}
+              {!photoUrl && <div className="absolute inset-8 border-4 border-dashed border-white/20 rounded-full pointer-events-none animate-[spin_10s_linear_infinite]" />}
+              <div className="absolute inset-0 bg-linear-to-b from-transparent via-transparent to-black/40 pointer-events-none" />
+            </div>
+
+            <div className="flex justify-center gap-4">
+              {!photoUrl ? (
+                <button className="glass-button !w-auto px-10" onClick={capture}>
+                  <Camera size={20} /> Capturar Foto
+                </button>
+              ) : (
+                <>
+                  <button className="glass-button secondary !w-auto px-8" onClick={() => setPhotoUrl(null)}>
+                    Reintentar
+                  </button>
+                  <button className="glass-button !w-auto px-10" onClick={() => setStep(2)}>
+                    Confirmar y Continuar <ChevronRight size={20} />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: FINGERPRINT */}
+        {step === 2 && (
+          <div className="animate-fade-in flat-card max-w-2xl mx-auto text-center !p-10">
+            <div className="mb-8">
+              <h2 className="text-2xl font-black text-text-main mb-1">2. Verificación Dactilar</h2>
+              <p className="text-text-muted">Coloque su dedo en el lector biométrico oficial</p>
+            </div>
+
+            <div className={`flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-3xl mb-10 transition-all duration-300 ${
+              fingerprintFile ? 'bg-success-emerald/5 border-success-emerald' : 'bg-bg-main border-surface-border'
+            }`}>
+              <Fingerprint 
+                size={80} 
+                className={`transition-all duration-500 mb-6 ${fingerprintFile ? 'text-success-emerald scale-110' : 'text-primary-navy/30'}`} 
+              />
+              
+              <input type="file" id="fingerprint-upload" onChange={handleFingerprintUpload} className="hidden" />
+              <label htmlFor="fingerprint-upload" className="glass-button secondary !w-auto cursor-pointer px-8 py-2.5">
+                {fingerprintFile ? 'Huella Registrada' : 'Escanear Huella'}
+              </label>
+              
+              {fingerprintFile && (
+                <div className="mt-6 text-success-emerald font-black text-sm flex items-center gap-2 animate-bounce">
+                  <Check size={18} /> Muestra válida: {fingerprintFile.name}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-center gap-4">
+              <button className="glass-button secondary !w-auto px-8" onClick={() => setStep(1)}>Atrás</button>
+              <button className="glass-button !w-auto px-10" onClick={() => setStep(3)} disabled={!fingerprintFile}>
+                Continuar a Votación <ChevronRight size={20} />
               </button>
-            ) : (
-              <>
-                <button className="glass-button secondary" onClick={() => setPhotoUrl(null)}>
-                  Reintentar
-                </button>
-                <button className="glass-button" onClick={() => setStep(2)}>
-                  Siguiente <ChevronRight size={20} />
-                </button>
-              </>
-            )}
+            </div>
           </div>
-        </GlassCard>
-      )}
+        )}
 
-      {/* STEP 2: FINGERPRINT */}
-      {step === 2 && (
-        <GlassCard className="animate-fade-in" style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-          <h2 style={{ marginBottom: '1.5rem' }}>2. Verificación Dactilar</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
-            Por favor, coloque su dedo en el escáner (simulado adjuntando un archivo).
-          </p>
-
-          <div style={{ 
-            padding: '3rem 2rem', 
-            border: '2px dashed var(--surface-border)', 
-            borderRadius: '12px',
-            marginBottom: '2rem',
-            backgroundColor: fingerprintFile ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-            borderColor: fingerprintFile ? 'var(--success)' : 'var(--surface-border)',
-            transition: 'all 0.3s'
-          }}>
-            <Fingerprint size={64} color={fingerprintFile ? 'var(--success)' : 'var(--text-muted)'} style={{ marginBottom: '1rem' }} />
+        {/* STEP 3: CANDIDATE SELECTION */}
+        {step === 3 && (
+          <div className="animate-fade-in">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-black text-text-main mb-1 tracking-tight">Seleccione su Candidato</h2>
+              <p className="text-text-muted">Haga clic en la tarjeta del candidato de su preferencia</p>
+            </div>
             
-            <input 
-              type="file" 
-              id="fingerprint-upload" 
-              onChange={handleFingerprintUpload} 
-              style={{ display: 'none' }} 
-            />
-            
-            <label htmlFor="fingerprint-upload" className="glass-button secondary" style={{ cursor: 'pointer' }}>
-              {fingerprintFile ? 'Cambiar Archivo' : 'Simular Escáner (Subir archivo)'}
-            </label>
-            
-            {fingerprintFile && (
-              <p style={{ marginTop: '1rem', color: 'var(--success)', fontWeight: 'bold' }}>
-                <Check size={16} style={{ verticalAlign: 'middle', marginRight: '4px' }}/>
-                Huella capturada ({fingerprintFile.name})
-              </p>
-            )}
-          </div>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-14">
+              {candidates.map(c => (
+                <CandidateCard 
+                  key={c.id} 
+                  candidate={c} 
+                  isSelected={selectedCandidate?.id === c.id}
+                  onSelect={setSelectedCandidate}
+                />
+              ))}
+            </div>
 
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-            <button className="glass-button secondary" onClick={() => setStep(1)}>
-              Atrás
-            </button>
-            <button className="glass-button" onClick={() => setStep(3)} disabled={!fingerprintFile}>
-              Siguiente <ChevronRight size={20} />
-            </button>
+            <div className="flex items-center justify-center gap-6 pt-10 border-t border-surface-border">
+              <button className="glass-button secondary !w-auto px-12 py-3.5" onClick={() => setStep(2)}>
+                Atrás
+              </button>
+              <button 
+                className={`glass-button !w-auto px-16 py-3.5 transition-all duration-500 shadow-xl ${
+                  selectedCandidate ? '!bg-success-emerald !from-success-emerald !to-emerald-600 scale-105 ring-4 ring-success-emerald/20' : ''
+                }`}
+                onClick={submitVote} 
+                disabled={!selectedCandidate || isSubmitting}
+              >
+                {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : (selectedCandidate ? 'Confirmar Voto Oficial' : 'Seleccione un Candidato')}
+                {!isSubmitting && <CheckCircle size={20} className={selectedCandidate ? 'animate-pulse' : ''} />}
+              </button>
+            </div>
           </div>
-        </GlassCard>
-      )}
+        )}
 
-      {/* STEP 3: CANDIDATE SELECTION */}
-      {step === 3 && (
-        <div className="animate-fade-in" style={{ maxWidth: '1000px', margin: '0 auto' }}>
-          <h2 style={{ textAlign: 'center', marginBottom: '2rem' }}>3. Seleccione a su Candidato</h2>
-          
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
-            gap: '1.5rem',
-            marginBottom: '3rem' 
-          }}>
-            {candidates.map(c => (
-              <CandidateCard 
-                key={c.id} 
-                candidate={c} 
-                isSelected={selectedCandidate?.id === c.id}
-                onSelect={setSelectedCandidate}
-              />
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-            <button className="glass-button secondary" onClick={() => setStep(2)}>
-              Atrás
-            </button>
-            <button 
-              className="glass-button" 
-              onClick={submitVote} 
-              disabled={!selectedCandidate || isSubmitting}
-              style={{ padding: '12px 32px', backgroundColor: selectedCandidate ? 'var(--success)' : '' }}
-            >
-              <CheckCircle size={20} />
-              {isSubmitting ? 'Procesando...' : 'Confirmar Voto'}
-            </button>
-          </div>
-        </div>
-      )}
-
+      </div>
     </div>
   );
 }
 
-// Subcomponent for Step Indicator
-function StepIndicator({ current, target, label, icon }) {
-  const isPast = current > target;
-  const isCurrent = current === target;
-  
+function StepIcon({ active, done, icon, label }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-      <div style={{ 
-        width: '36px', height: '36px', 
-        borderRadius: '50%', 
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: isPast ? 'var(--success)' : isCurrent ? 'var(--primary)' : 'var(--bg-color)',
-        color: isPast || isCurrent ? 'white' : 'var(--text-muted)',
-        border: `2px solid ${isPast ? 'var(--success)' : isCurrent ? 'var(--primary)' : 'var(--surface-border)'}`,
-        boxShadow: isCurrent ? '0 0 10px var(--primary-glow)' : 'none',
-        transition: 'all 0.3s ease'
-      }}>
+    <div className="flex flex-col items-center gap-3">
+      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 border-2 ${
+        done 
+          ? 'bg-success-emerald border-success-emerald text-white shadow-lg shadow-success-emerald/20' 
+          : active 
+            ? 'bg-primary-navy border-primary-navy text-white shadow-xl shadow-primary-navy/20 scale-110' 
+            : 'bg-surface border-surface-border text-text-muted shadow-sm'
+      }`}>
         {icon}
       </div>
-      <span style={{ 
-        fontSize: '0.85rem', 
-        fontWeight: isCurrent ? '700' : '500',
-        color: isCurrent ? 'var(--primary)' : 'var(--text-muted)' 
-      }}>
+      <span className={`text-[11px] font-black uppercase tracking-widest transition-colors duration-300 ${active ? 'text-primary-navy' : 'text-text-muted'}`}>
         {label}
       </span>
     </div>

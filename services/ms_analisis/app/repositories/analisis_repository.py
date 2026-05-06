@@ -7,14 +7,27 @@ class AnalysisRepository:
 
     def count_by_candidate(self):
         sql = text("""
-            SELECT c.id AS candidate_id, c.full_name AS candidate_name, COUNT(v.id) AS total
+            SELECT 
+                c.id AS candidate_id, 
+                c.full_name AS candidate_name, 
+                c.photo_url, 
+                c.party_symbol_url,
+                COUNT(v.id) AS total
             FROM candidates c
             LEFT JOIN votes v ON c.id = v.candidate_id
-            GROUP BY c.id, c.full_name
+            GROUP BY c.id, c.full_name, c.photo_url, c.party_symbol_url
             ORDER BY total DESC
         """)
         result = db.session.execute(sql)
-        return [{"candidate_id": row.candidate_id, "candidate_name": row.candidate_name, "total": row.total} for row in result]
+        return [
+            {
+                "candidate_id": row.candidate_id, 
+                "candidate_name": row.candidate_name, 
+                "photo_url": row.photo_url,
+                "party_symbol_url": row.party_symbol_url,
+                "total": row.total
+            } for row in result
+        ]
 
     def total_votes(self) -> int:
         sql = text("SELECT COUNT(*) AS total FROM votes")

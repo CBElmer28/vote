@@ -1,4 +1,5 @@
 from app.repositories.candidate_repository import CandidateRepository
+from app.utils.image_handler import ImageHandler
 
 
 class CandidateService:
@@ -6,6 +7,26 @@ class CandidateService:
 
     def __init__(self):
         self.repo = CandidateRepository()
+
+    def _process_images(self, data: dict):
+        """Detects base64 strings in image fields and saves them as files."""
+        # 1. Main Candidate Images
+        for field in ["photo_url", "party_symbol_url"]:
+            val = data.get(field)
+            if val and val.startswith("data:image"):
+                new_url = ImageHandler.save_base64_as_webp(val)
+                if new_url:
+                    data[field] = new_url
+
+        # 2. Nested Members Images
+        if "members" in data and isinstance(data["members"], list):
+            for member in data["members"]:
+                photo = member.get("photo")
+                if photo and photo.startswith("data:image"):
+                    new_url = ImageHandler.save_base64_as_webp(photo)
+                    if new_url:
+                        member["photo"] = new_url
+        return data
 
     # ------------------------------------------------------------------ #
     #  Queries
@@ -33,8 +54,11 @@ class CandidateService:
             return None, f"A candidate named '{data['full_name']}' already exists"
 
         # Only allow known fields to reach the model
-        allowed = {"full_name", "party", "photo_url", "description", "is_active"}
+        allowed = {"full_name", "party", "photo_url", "party_symbol_url", "members", "description", "is_active"}
         clean_data = {k: v for k, v in data.items() if k in allowed}
+
+        # Process any base64 images
+        clean_data = self._process_images(clean_data)
 
         candidate = self.repo.create(clean_data)
         return candidate.to_dict(), None
@@ -50,8 +74,11 @@ class CandidateService:
             if existing and existing.id != candidate_id:
                 return None, f"Another candidate is already named '{data['full_name']}'"
 
-        allowed = {"full_name", "party", "photo_url", "description", "is_active"}
+        allowed = {"full_name", "party", "photo_url", "party_symbol_url", "members", "description", "is_active"}
         clean_data = {k: v for k, v in data.items() if k in allowed}
+
+        # Process any base64 images
+        clean_data = self._process_images(clean_data)
 
         updated = self.repo.update(candidate, clean_data)
         return updated.to_dict(), None

@@ -28,12 +28,12 @@ export const AuthProvider = ({ children }) => {
   const fetchUser = async () => {
     try {
       // MS1 - Usuarios
-      const res = await axios.get('http://localhost:5001/api/usuarios/auth/me');
+      const res = await axios.get('http://localhost/api/usuarios/auth/me');
       setUser(res.data.data);
       setIsAdmin(res.data.data.role === 'ADMIN');
       
       // Also check if user has voted via MS3
-      const voteRes = await axios.get(`http://localhost:5003/api/votos/user/${res.data.data.id}`);
+      const voteRes = await axios.get(`http://localhost/api/votacion/user/${res.data.data.id}`);
       setHasVoted(voteRes.data.has_voted);
     } catch (err) {
       console.error('Failed to fetch user', err);
@@ -45,7 +45,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     try {
-      const res = await axios.post('http://localhost:5001/api/usuarios/auth/login', credentials);
+      const res = await axios.post('http://localhost/api/usuarios/auth/login', credentials);
       setToken(res.data.token);
       return { success: true };
     } catch (err) {
@@ -57,9 +57,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    localStorage.removeItem('token');
+    delete axios.defaults.headers.common['Authorization'];
     setToken(null);
-    setHasVoted(false);
+    setUser(null);
     setIsAdmin(false);
+    setHasVoted(false);
   };
 
   return (

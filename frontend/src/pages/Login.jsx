@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { GlassCard } from '../components/GlassCard';
 import Webcam from 'react-webcam';
 import { 
-  LogIn, User, ShieldCheck, Globe, Moon, Sun, Vote, 
-  Mail, Fingerprint, Camera, ChevronRight, Check, AlertCircle 
+  User, ShieldCheck, Globe, Moon, Sun, Vote, 
+  Mail, Fingerprint, Camera, ChevronRight, AlertCircle 
 } from 'lucide-react';
 
 export default function Login({ isAdminLogin = false }) {
@@ -15,7 +14,6 @@ export default function Login({ isAdminLogin = false }) {
   const [theme, setTheme] = useState('light');
   const [step, setStep] = useState(1);
   
-  // Biometrics
   const [photoUrl, setPhotoUrl] = useState(null);
   const [fingerprintFile, setFingerprintFile] = useState(null);
   const webcamRef = useRef(null);
@@ -33,9 +31,7 @@ export default function Login({ isAdminLogin = false }) {
 
   const capture = useCallback(() => {
     const imageSrc = webcamRef.current.getScreenshot();
-    if (imageSrc) {
-      setPhotoUrl(imageSrc);
-    }
+    if (imageSrc) setPhotoUrl(imageSrc);
   }, [webcamRef]);
 
   const handleFingerprintUpload = (e) => {
@@ -49,141 +45,99 @@ export default function Login({ isAdminLogin = false }) {
     setError('');
     
     if (!isAdminLogin) {
-      // Voter flow: Just DNI and redirect
       if (identifier.length !== 8) {
         setError('El DNI debe tener exactamente 8 dígitos.');
         return;
       }
       setIsLoading(true);
       const result = await login({ dni: identifier });
-      if (result.success) {
-        navigate('/vote');
-      } else {
-        setError(result.error);
-        setIsLoading(false);
-      }
+      if (result.success) navigate('/vote');
+      else { setError(result.error); setIsLoading(false); }
     } else {
-      // Admin flow: Validate email format then proceed to biometrics
       if (!identifier.includes('@')) {
         setError('Ingrese un correo electrónico válido.');
         return;
       }
-      setStep(2); // Go to Fingerprint
+      setStep(2);
     }
   };
 
   const handleAdminFinalLogin = async () => {
     setIsLoading(true);
     setError('');
-    
-    // In a real system, we'd send the biometrics to ms_biometrico here.
-    // For this flow, we'll validate the email and then redirect.
     const result = await login({ email: identifier });
-    if (result.success) {
-      navigate('/admin/dashboard');
-    } else {
-      setError(result.error);
-      setIsLoading(false);
-      setStep(1); // Reset on error
-    }
+    if (result.success) navigate('/admin/dashboard');
+    else { setError(result.error); setIsLoading(false); setStep(1); }
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center', 
-      width: '100vw',
-      minHeight: '100vh',
-      backgroundImage: 'url(/bg_institutional.png)',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundAttachment: 'fixed',
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      zIndex: 0
-    }}>
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backdropFilter: 'blur(12px)',
-        backgroundColor: 'var(--overlay-bg)',
-        zIndex: 1,
-        transition: 'background-color 0.3s ease'
-      }} />
-
-      {/* Header Bar */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        padding: '1.5rem 2rem',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        zIndex: 3
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#fff' }}>
-          <Globe size={18} />
-          <select style={{ background: 'transparent', color: '#fff', border: 'none', outline: 'none', fontWeight: 500, cursor: 'pointer' }}>
-            <option value="es" style={{ color: '#000' }}>ES</option>
-            <option value="en" style={{ color: '#000' }}>EN</option>
-          </select>
+    <div className="min-h-screen flex items-center justify-center p-6 bg-cover bg-center relative" 
+      style={{ backgroundImage: 'linear-gradient(rgba(15, 23, 42, 0.6), rgba(15, 23, 42, 0.6)), url(/bg_institutional.png)' }}>
+      
+      {/* Navbar Overlay */}
+      <header className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10 max-w-7xl mx-auto w-full">
+        <div className="flex items-center gap-3 text-white">
+          <Globe size={20} />
+          <span className="font-semibold text-sm tracking-wider uppercase">Español</span>
         </div>
-        <button onClick={toggleTheme} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}>
-          {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+        <button 
+          onClick={toggleTheme} 
+          className="glass-button secondary !w-11 !h-11 !p-0 rounded-full !border-white/20 !bg-white/10 !text-white hover:!bg-white/20 transition-all"
+        >
+          {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
         </button>
-      </div>
+      </header>
 
-      <div className="animate-fade-in" style={{ width: '100%', maxWidth: step === 1 ? '440px' : '600px', position: 'relative', zIndex: 2, padding: '2rem', transition: 'max-width 0.5s ease' }}>
+      <main className="animate-fade-in w-full max-w-[460px] transition-all duration-500" 
+        style={{ maxWidth: step === 1 ? '460px' : '640px' }}>
         
-        <div style={{ textAlign: 'center', marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <Vote size={36} color="var(--primary)" />
-            <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#fff', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>VoteSystem</h1>
+        {/* Logo Section */}
+        <div className="flex flex-col items-center mb-10 text-center">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="bg-white p-2.5 rounded-xl shadow-2xl">
+              <Vote size={32} className="text-primary-navy" />
+            </div>
+            <h1 className="text-4xl font-extrabold text-white tracking-tight">VoteSystem</h1>
           </div>
-          <p style={{ color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>Portal de {isAdminLogin ? 'Administración' : 'Votantes'}</p>
+          <p className="text-white/80 font-medium tracking-[0.1em] uppercase text-xs">
+            {isAdminLogin ? 'Portal Administrativo' : 'Portal de Votantes'}
+          </p>
         </div>
 
+        {/* Multi-step Progress (Admin only) */}
         {isAdminLogin && step > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              <StepIndicator current={step} target={2} label="Huella" icon={<Fingerprint size={16} />} />
-              <div style={{ width: '40px', height: '2px', background: step > 2 ? 'var(--primary)' : 'var(--surface-border)' }} />
-              <StepIndicator current={step} target={3} label="Rostro" icon={<Camera size={16} />} />
-            </div>
+          <div className="flex items-center justify-center gap-4 mb-8">
+            <StepIcon active={step === 2} done={step > 2} icon={<Fingerprint size={18} />} label="Huella" />
+            <div className={`h-0.5 w-10 transition-colors duration-500 ${step > 2 ? 'bg-success-emerald' : 'bg-white/20'}`} />
+            <StepIcon active={step === 3} done={false} icon={<Camera size={18} />} label="Rostro" />
           </div>
         )}
 
-        <GlassCard>
+        <div className="flat-card !shadow-2xl">
           {error && (
-            <div style={{ marginBottom: '1.5rem', padding: '12px', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: 'var(--danger)', borderRadius: '8px', fontSize: '0.9rem', textAlign: 'center', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-              <AlertCircle size={16} /> {error}
+            <div className="animate-fade-in mb-6 p-4 rounded-xl bg-danger-rose/10 border border-danger-rose/20 text-danger-rose text-sm flex items-center gap-3">
+              <AlertCircle size={18} /> {error}
             </div>
           )}
 
           {/* STEP 1: CREDENTIALS */}
           {step === 1 && (
-            <form onSubmit={handleStep1} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <h2 style={{ textAlign: 'center', marginBottom: '0.5rem', color: 'var(--text-main)' }}>
-                {isAdminLogin ? 'Acceso Administrativo' : 'Iniciar Sesión'}
-              </h2>
+            <form onSubmit={handleStep1} className="flex flex-col gap-6">
+              <div className="text-center mb-2">
+                <h2 className="text-2xl font-extrabold text-text-main">Bienvenido</h2>
+                <p className="text-text-muted">Ingrese sus credenciales para continuar</p>
+              </div>
               
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: 600 }}>
-                  {isAdminLogin ? 'Correo Electrónico' : 'Documento de Identidad (DNI)'}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-text-main block px-1">
+                  {isAdminLogin ? 'Correo Institucional' : 'DNI del Ciudadano'}
                 </label>
                 <div className="input-wrapper">
                   {isAdminLogin ? <Mail size={20} className="input-icon" /> : <User size={20} className="input-icon" />}
                   <input 
                     type={isAdminLogin ? "email" : "text"} 
                     className="glass-input" 
-                    placeholder={isAdminLogin ? "admin@example.com" : "Ej. 12345678"}
+                    placeholder={isAdminLogin ? "admin@elecciones.gob" : "Número de 8 dígitos"}
                     value={identifier}
                     onChange={(e) => setIdentifier(isAdminLogin ? e.target.value : e.target.value.replace(/\D/g, ''))}
                     maxLength={isAdminLogin ? 100 : 8}
@@ -192,88 +146,121 @@ export default function Login({ isAdminLogin = false }) {
                 </div>
               </div>
 
-              <button type="submit" className="glass-button" disabled={isLoading}>
-                {isLoading ? 'Cargando...' : isAdminLogin ? 'Continuar a Biometría' : 'Ingresar'}
+              <button type="submit" className="glass-button !py-4" disabled={isLoading}>
+                {isLoading ? 'Verificando...' : isAdminLogin ? 'Continuar a Biometría' : 'Ingresar al Sistema'}
                 {!isLoading && <ChevronRight size={20} />}
               </button>
+
+              {!isAdminLogin && (
+                <div className="text-center border-t border-surface-border pt-6 mt-2">
+                  <Link to="/admin/login" className="text-primary-blue font-bold hover:underline text-sm">
+                    ¿Eres administrador? Accede aquí
+                  </Link>
+                </div>
+              )}
             </form>
           )}
 
-          {/* STEP 2: FINGERPRINT (Admin Only) */}
+          {/* STEP 2: FINGERPRINT (Admin) */}
           {isAdminLogin && step === 2 && (
-            <div style={{ textAlign: 'center' }}>
-              <h2 style={{ marginBottom: '1.5rem' }}>Verificación Dactilar</h2>
-              <div style={{ padding: '2rem', border: '2px dashed var(--surface-border)', borderRadius: '12px', marginBottom: '2rem' }}>
-                <Fingerprint size={64} color={fingerprintFile ? 'var(--success)' : 'var(--text-muted)'} style={{ marginBottom: '1rem' }} />
-                <input type="file" id="admin-finger-upload" onChange={handleFingerprintUpload} style={{ display: 'none' }} />
-                <label htmlFor="admin-finger-upload" className="glass-button secondary" style={{ cursor: 'pointer' }}>
-                  {fingerprintFile ? 'Huella Capturada' : 'Subir Huella (Simulado)'}
+            <div className="flex flex-col items-center gap-6">
+              <div className="text-center">
+                <h2 className="text-2xl font-extrabold">Identidad Dactilar</h2>
+                <p className="text-text-muted">Coloque su dedo en el lector biométrico</p>
+              </div>
+
+              <div className="w-full h-60 border-2 border-dashed border-surface-border rounded-3xl bg-bg-main flex flex-col items-center justify-center gap-4 group transition-all hover:border-primary-blue/50">
+                <Fingerprint 
+                  size={80} 
+                  className={`transition-all duration-500 ${fingerprintFile ? 'text-success-emerald scale-110' : 'text-primary-navy/30'}`} 
+                />
+                <input type="file" id="admin-finger-upload" onChange={handleFingerprintUpload} className="hidden" />
+                <label htmlFor="admin-finger-upload" className="glass-button secondary !w-auto cursor-pointer py-2.5 px-6">
+                  {fingerprintFile ? 'Huella Registrada' : 'Escanear Huella'}
                 </label>
               </div>
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <button className="glass-button secondary" onClick={() => setStep(1)}>Atrás</button>
-                <button className="glass-button" onClick={() => setStep(3)} disabled={!fingerprintFile}>
-                  Siguiente <ChevronRight size={20} />
+
+              <div className="flex items-center gap-4 w-full mt-2">
+                <button className="glass-button secondary !px-4 flex-1" onClick={() => setStep(1)}>
+                  Atrás
+                </button>
+                <button className="glass-button !px-4 flex-2" onClick={() => setStep(3)} disabled={!fingerprintFile}>
+                  Siguiente paso
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 3: FACE (Admin Only) */}
+          {/* STEP 3: FACE (Admin) */}
           {isAdminLogin && step === 3 && (
-            <div style={{ textAlign: 'center' }}>
-              <h2 style={{ marginBottom: '1.5rem' }}>Verificación Facial</h2>
-              <div style={{ borderRadius: '12px', overflow: 'hidden', marginBottom: '1.5rem', backgroundColor: '#000' }}>
-                {!photoUrl ? (
-                  <Webcam audio={false} ref={webcamRef} screenshotFormat="image/jpeg" style={{ width: '100%' }} />
-                ) : (
-                  <img src={photoUrl} alt="Capture" style={{ width: '100%' }} />
-                )}
+            <div className="flex flex-col items-center gap-8">
+              <div className="text-center">
+                <h2 className="text-2xl font-black text-text-main">Validación Facial</h2>
+                <p className="text-text-muted">Mire directamente a la cámara para el escaneo 3D</p>
               </div>
-              <div style={{ display: 'flex', gap: '1rem' }}>
+
+              <div className="w-full rounded-3xl overflow-hidden bg-slate-900 shadow-2xl relative aspect-video border-4 border-surface-border">
                 {!photoUrl ? (
-                  <button className="glass-button" onClick={capture}><Camera size={20} /> Capturar</button>
+                  <Webcam 
+                    audio={false} 
+                    ref={webcamRef} 
+                    screenshotFormat="image/jpeg" 
+                    className="w-full h-full object-cover scale-x-[-1]" 
+                  />
+                ) : (
+                  <img src={photoUrl} alt="Captura" className="w-full h-full object-cover scale-x-[-1]" />
+                )}
+                <div className="absolute inset-8 border-4 border-white/20 rounded-full pointer-events-none border-dashed animate-[spin_10s_linear_infinite]" />
+                <div className="absolute inset-0 bg-linear-to-b from-transparent via-transparent to-black/40 pointer-events-none" />
+              </div>
+
+              <div className="flex items-center gap-4 w-full mt-2">
+                {!photoUrl ? (
+                  <>
+                    <button className="glass-button secondary !px-4 flex-1" onClick={() => setStep(2)}>
+                      Atrás
+                    </button>
+                    <button className="glass-button !px-4 flex-2" onClick={capture}>
+                      <Camera size={20} /> Capturar Rostro
+                    </button>
+                  </>
                 ) : (
                   <>
-                    <button className="glass-button secondary" onClick={() => setPhotoUrl(null)}>Reintentar</button>
-                    <button className="glass-button" onClick={handleAdminFinalLogin} disabled={isLoading}>
-                      {isLoading ? 'Verificando...' : 'Finalizar Login'}
+                    <button className="glass-button secondary !px-4 flex-1" onClick={() => setPhotoUrl(null)}>
+                      Reintentar
+                    </button>
+                    <button className="glass-button !px-4 flex-2" onClick={handleAdminFinalLogin} disabled={isLoading}>
+                      {isLoading ? <Loader2 className="animate-spin" /> : 'Confirmar Identidad'}
                     </button>
                   </>
                 )}
               </div>
             </div>
           )}
-
-          {!isAdminLogin && step === 1 && (
-            <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.85rem' }}>
-              <Link to="/admin/login" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Acceso Administrativo</Link>
-            </div>
-          )}
-        </GlassCard>
-
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginTop: '2rem', color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem' }}>
-          <ShieldCheck size={16} />
-          <span>Seguridad Biométrica Activa</span>
         </div>
-      </div>
+
+        <div className="flex items-center justify-center gap-3 mt-10 text-white/70 text-sm font-semibold">
+          <ShieldCheck size={18} className="text-success-emerald" />
+          <span>Encriptación de grado militar activa</span>
+        </div>
+      </main>
     </div>
   );
 }
 
-function StepIndicator({ current, target, label, icon }) {
-  const isPast = current > target;
-  const isCurrent = current === target;
+function StepIcon({ active, done, icon, label }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-      <div style={{ 
-        width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: isPast ? 'var(--success)' : isCurrent ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
-        color: 'white',
-        border: `2px solid ${isPast ? 'var(--success)' : isCurrent ? 'var(--primary)' : 'rgba(255,255,255,0.3)'}`,
-        boxShadow: isCurrent ? '0 0 15px var(--primary-glow)' : 'none'
-      }}>{icon}</div>
-      <span style={{ fontSize: '0.8rem', fontWeight: isCurrent ? '700' : '500', color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>{label}</span>
+    <div className="flex flex-col items-center gap-2">
+      <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-500 border-2 ${
+        done 
+          ? 'bg-success-emerald border-success-emerald text-white shadow-lg shadow-success-emerald/20' 
+          : active 
+            ? 'bg-white border-white text-primary-navy shadow-lg shadow-white/20 scale-110' 
+            : 'bg-white/10 border-white/20 text-white/50'
+      }`}>
+        {icon}
+      </div>
+      <span className="text-[10px] text-white font-bold uppercase tracking-widest">{label}</span>
     </div>
   );
 }

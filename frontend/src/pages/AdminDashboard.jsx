@@ -1,98 +1,108 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Register from './Register';
-import { Users, LogOut, FileText } from 'lucide-react';
+import CandidateManager from '../components/CandidateManager';
+import { Users, LogOut, FileText, LayoutDashboard, ChevronRight, UserCircle } from 'lucide-react';
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('voters');
 
+  const handleLogout = () => {
+    logout();
+    navigate('/admin/login');
+  };
+
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-color)' }}>
+    <div className="flex h-screen w-full bg-bg-main overflow-hidden text-text-main font-body">
+      
       {/* Sidebar */}
-      <div style={{
-        width: '250px',
-        backgroundColor: 'var(--surface)',
-        borderRight: '1px solid var(--surface-border)',
-        padding: '2rem 1rem',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
-        <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
-          <h2 className="gradient-text">Admin Portal</h2>
-          <div style={{ marginTop: '0.5rem', padding: '0.5rem', backgroundColor: 'var(--primary-glow)', borderRadius: '8px' }}>
-            <p style={{ fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 700 }}>
+      <aside className="w-72 h-full bg-primary-navy border-r border-white/10 p-8 flex flex-col z-20 shadow-2xl shrink-0 text-white">
+        {/* Brand */}
+        <div className="flex items-center gap-3 mb-12">
+          <div className="bg-white text-primary-navy p-2 rounded-xl shadow-lg">
+            <LayoutDashboard size={22} />
+          </div>
+          <h2 className="text-xl font-black tracking-tight uppercase text-white">Admin Portal</h2>
+        </div>
+
+        {/* Profile Summary */}
+        <div className="mb-10 p-5 bg-white/10 backdrop-blur-md rounded-[2rem] flex items-center gap-4 border border-white/10 shadow-inner">
+          <div className="p-1 bg-white/20 rounded-full">
+            <UserCircle size={36} className="text-white" />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm font-bold text-white truncate">
               {user?.first_name} {user?.last_name}
-            </p>
+            </span>
+            <span className="text-[10px] text-white/60 font-black uppercase tracking-widest">Administrador</span>
           </div>
         </div>
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
-          <button 
+        <nav className="flex flex-col gap-3 flex-1">
+          <SidebarButton 
+            active={activeTab === 'voters'} 
             onClick={() => setActiveTab('voters')}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '0.5rem',
-              padding: '0.75rem 1rem',
-              backgroundColor: activeTab === 'voters' ? 'rgba(30, 58, 138, 0.1)' : 'transparent',
-              color: activeTab === 'voters' ? 'var(--primary)' : 'var(--text-muted)',
-              border: activeTab === 'voters' ? '1px solid var(--surface-border)' : '1px solid transparent', 
-              borderRadius: '8px', cursor: 'pointer',
-              fontWeight: activeTab === 'voters' ? 700 : 500, transition: 'all 0.2s'
-            }}
-          >
-            <Users size={18} /> Empadronar Votante
-          </button>
+            icon={<Users size={20} />}
+            label="Empadronar Votante"
+          />
           
-          <button 
+          <SidebarButton 
+            active={activeTab === 'candidates'} 
             onClick={() => setActiveTab('candidates')}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '0.5rem',
-              padding: '0.75rem 1rem',
-              backgroundColor: activeTab === 'candidates' ? 'rgba(30, 58, 138, 0.1)' : 'transparent',
-              color: activeTab === 'candidates' ? 'var(--primary)' : 'var(--text-muted)',
-              border: activeTab === 'candidates' ? '1px solid var(--surface-border)' : '1px solid transparent',
-              borderRadius: '8px', cursor: 'pointer',
-              fontWeight: activeTab === 'candidates' ? 700 : 500, transition: 'all 0.2s'
-            }}
-          >
-            <FileText size={18} /> Gestión de Candidatos
-          </button>
+            icon={<FileText size={20} />}
+            label="Gestión de Candidatos"
+          />
         </nav>
 
         <button 
-          onClick={logout}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '0.5rem',
-            padding: '0.75rem 1rem',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            color: 'var(--danger)',
-            border: '1px solid rgba(239, 68, 68, 0.2)', 
-            borderRadius: '8px', cursor: 'pointer',
-            fontWeight: 600
-          }}
+          onClick={handleLogout}
+          className="mt-auto flex items-center gap-3 px-5 py-4 text-white/70 font-bold text-sm rounded-2xl hover:bg-danger-rose/20 hover:text-white transition-all duration-300 group"
         >
-          <LogOut size={18} /> Cerrar Sesión
+          <div className="p-2 bg-white/10 rounded-lg group-hover:bg-danger-rose/30 transition-colors">
+            <LogOut size={18} />
+          </div>
+          Cerrar Sesión
         </button>
-      </div>
+      </aside>
 
-      {/* Main Content */}
-      <div style={{ flex: 1, position: 'relative', overflowY: 'auto' }}>
+      {/* Main Content Area */}
+      <main className="flex-1 h-full overflow-y-auto relative scroll-smooth bg-bg-main">
         {activeTab === 'voters' && (
-          <div style={{ position: 'relative', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
-            {/* We render Register directly, but Register has a fixed absolute full-screen background right now!
-                We need to pass a prop to Register so it knows it's inside the dashboard, or we can just render the form inside the GlassCard without the absolute background. */}
+          <div className="animate-fade-in h-full">
             <Register inDashboard={true} />
           </div>
         )}
 
         {activeTab === 'candidates' && (
-          <div style={{ padding: '3rem', maxWidth: '800px', margin: '0 auto' }}>
-            <h2>Gestión de Candidatos</h2>
-            <p style={{ color: 'var(--text-muted)' }}>Módulo en desarrollo para crear/editar candidatos consumiendo MS5.</p>
-            {/* The candidate CRUD form would go here. For the scope of this MVP step, we just show a placeholder or we can quickly build a candidate form. */}
-          </div>
+          <CandidateManager />
         )}
-      </div>
+      </main>
     </div>
+  );
+}
+
+function SidebarButton({ active, onClick, icon, label }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={`flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-300 relative group overflow-hidden ${
+        active 
+          ? 'bg-white text-primary-navy shadow-xl scale-[1.02]' 
+          : 'text-white/70 hover:bg-white/5 hover:text-white'
+      }`}
+    >
+      <div className={`transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110 opacity-70 group-hover:opacity-100'}`}>
+        {icon}
+      </div>
+      <span className={`flex-1 text-sm tracking-wide ${active ? 'font-black' : 'font-bold'}`}>{label}</span>
+      {active && <ChevronRight size={16} className="animate-in slide-in-from-left-2" />}
+      
+      {active && (
+        <div className="absolute left-0 top-1/4 bottom-1/4 w-1.5 bg-primary-blue rounded-r-full" />
+      )}
+    </button>
   );
 }

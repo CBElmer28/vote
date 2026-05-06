@@ -42,7 +42,14 @@ function App() {
               </ProtectedRoute>
             } 
           />
-          <Route path="/results" element={<Results />} />
+          <Route 
+            path="/results" 
+            element={
+              <ProtectedRoute>
+                <Results />
+              </ProtectedRoute>
+            } 
+          />
           
           {/* Admin Routes */}
           <Route path="/admin/login" element={<Login isAdminLogin={true} />} />

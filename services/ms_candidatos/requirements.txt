@@ -7,3 +7,4 @@ marshmallow==3.21.3
 python-dotenv==1.0.1
 Werkzeug==3.0.3
 cryptography==42.0.8
+Pillow==10.3.0
