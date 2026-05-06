@@ -16,6 +16,27 @@ version: "3.9"
 services:
 
   # ----------------------------------------------------------
+  # GATEWAY — Nginx Proxy  (puerto 80)
+  # ----------------------------------------------------------
+  gateway:
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    container_name: votesystem_gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - ms_usuarios
+      - ms_biometrico
+      - ms_votacion
+      - ms_analisis
+      - ms_candidatos
+    networks:
+      - votenet
+
+
+  # ----------------------------------------------------------
   # BASE DE DATOS — MySQL 8
   # ----------------------------------------------------------
   db:
@@ -51,8 +72,8 @@ services:
       dockerfile: Dockerfile
     container_name: votesystem_ms_usuarios
     restart: unless-stopped
-    ports:
-      - "5001:5001"
+#    ports:
+#      - "5001:5001"
     environment:
       FLASK_ENV: development
       FLASK_DEBUG: "1"
@@ -79,8 +100,8 @@ services:
       dockerfile: Dockerfile
     container_name: votesystem_ms_biometrico
     restart: unless-stopped
-    ports:
-      - "5002:5002"
+#    ports:
+#      - "5002:5002"
     environment:
       FLASK_ENV: development
       FLASK_DEBUG: "1"
@@ -106,8 +127,8 @@ services:
       dockerfile: Dockerfile
     container_name: votesystem_ms_votacion
     restart: unless-stopped
-    ports:
-      - "5003:5003"
+#    ports:
+#      - "5003:5003"
     environment:
       FLASK_ENV: development
       FLASK_DEBUG: "1"
@@ -136,8 +157,8 @@ services:
       dockerfile: Dockerfile
     container_name: votesystem_ms_analisis
     restart: unless-stopped
-    ports:
-      - "5004:5004"
+#    ports:
+#      - "5004:5004"
     environment:
       FLASK_ENV: development
       FLASK_DEBUG: "1"
@@ -164,8 +185,8 @@ services:
       dockerfile: Dockerfile
     container_name: votesystem_ms_candidatos
     restart: unless-stopped
-    ports:
-      - "5005:5005"
+#    ports:
+#      - "5005:5005"
     environment:
       FLASK_ENV: development
       FLASK_DEBUG: "1"

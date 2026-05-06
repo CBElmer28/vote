@@ -14,7 +14,7 @@ def create_app():
     db.init_app(app)
 
     from app.controllers.voto_controller import voto_bp
-    app.register_blueprint(voto_bp, url_prefix="/api/votos")
+    app.register_blueprint(voto_bp, url_prefix="/api/votacion")
 
     with app.app_context():
         db.create_all()

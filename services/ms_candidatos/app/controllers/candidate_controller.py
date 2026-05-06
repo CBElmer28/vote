@@ -56,7 +56,7 @@ def create_candidate():
     if error:
         return jsonify({"error": error}), 422
 
-    return jsonify({"message": "Candidate created successfully", "data": candidate}), 201
+    return jsonify({"message": "Candidato creado con éxito", "data": candidate}), 201
 
 
 # ------------------------------------------------------------------ #
@@ -71,7 +71,7 @@ def update_candidate(candidate_id):
     candidate, error = service.update_candidate(candidate_id, data)
     if error:
         return jsonify({"error": error}), 422
-    return jsonify({"message": "Candidate updated", "data": candidate}), 200
+    return jsonify({"message": "Candidato actualizado", "data": candidate}), 200
 
 
 # ------------------------------------------------------------------ #
@@ -87,8 +87,8 @@ def toggle_active(candidate_id):
     candidate, error = service.toggle_active(candidate_id)
     if error:
         return jsonify({"error": error}), 404
-    status = "activated" if candidate["is_active"] else "deactivated"
-    return jsonify({"message": f"Candidate {status}", "data": candidate}), 200
+    status = "activado" if candidate["is_active"] else "desactivado"
+    return jsonify({"message": f"Candidato {status}", "data": candidate}), 200
 
 
 # ------------------------------------------------------------------ #
@@ -99,4 +99,4 @@ def delete_candidate(candidate_id):
     ok, error = service.delete_candidate(candidate_id)
     if error:
         return jsonify({"error": error}), 404
-    return jsonify({"message": "Candidate deleted"}), 200
+    return jsonify({"message": "Candidato eliminado"}), 200

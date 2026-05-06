@@ -38,9 +38,9 @@ class AnalysisService:
 
         fig, ax = plt.subplots(figsize=(9, 5))
         bars = ax.bar(labels, totals, color="#4A90D9", edgecolor="white", width=0.5)
-        ax.set_title("Voting Results", fontsize=16, fontweight="bold")
-        ax.set_xlabel("Candidate")
-        ax.set_ylabel("Votes")
+        ax.set_title("Resultados de Votación", fontsize=16, fontweight="bold")
+        ax.set_xlabel("Candidato")
+        ax.set_ylabel("Votos")
         ax.bar_label(bars, padding=4)
         ax.set_ylim(0, max(totals) * 1.25)
         fig.tight_layout()
@@ -58,6 +58,6 @@ class AnalysisService:
         fig, ax = plt.subplots(figsize=(7, 7))
         ax.pie(sizes, labels=labels, autopct="%1.1f%%",
                colors=colors[:len(sizes)], startangle=140)
-        ax.set_title("Vote Distribution", fontsize=16, fontweight="bold")
+        ax.set_title("Distribución de Votos", fontsize=16, fontweight="bold")
         fig.tight_layout()
         return self._to_base64_png(fig)

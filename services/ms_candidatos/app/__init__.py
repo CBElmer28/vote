@@ -14,7 +14,7 @@ def create_app():
     db.init_app(app)
 
     from app.controllers.candidate_controller import candidate_bp
-    app.register_blueprint(candidate_bp, url_prefix="/api/candidates")
+    app.register_blueprint(candidate_bp, url_prefix="/api/candidatos")
 
     with app.app_context():
         db.create_all()

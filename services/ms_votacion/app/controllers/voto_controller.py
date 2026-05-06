@@ -48,7 +48,7 @@ def cast_vote():
     if error:
         return jsonify({"error": error}), 422
 
-    return jsonify({"message": "Vote registered successfully", "data": vote}), 201
+    return jsonify({"message": "Voto registrado con éxito", "data": vote}), 201
 
 
 @voto_bp.route("/user/<int:user_id>", methods=["GET"])
