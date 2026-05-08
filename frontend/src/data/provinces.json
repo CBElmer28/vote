@@ -1,0 +1,21 @@
+[
+  { "id_prov": "1501", "id_depa": "15", "name": "Lima" },
+  { "id_prov": "1502", "id_depa": "15", "name": "Barranca" },
+  { "id_prov": "1503", "id_depa": "15", "name": "Cajatambo" },
+  { "id_prov": "1504", "id_depa": "15", "name": "Canta" },
+  { "id_prov": "1505", "id_depa": "15", "name": "Cañete" },
+  { "id_prov": "1506", "id_depa": "15", "name": "Huaral" },
+  { "id_prov": "1507", "id_depa": "15", "name": "Huarochirí" },
+  { "id_prov": "1508", "id_depa": "15", "name": "Huaura" },
+  { "id_prov": "1509", "id_depa": "15", "name": "Oyón" },
+  { "id_prov": "1510", "id_depa": "15", "name": "Yauyos" },
+  { "id_prov": "0401", "id_depa": "04", "name": "Arequipa" },
+  { "id_prov": "0402", "id_depa": "04", "name": "Camaná" },
+  { "id_prov": "0403", "id_depa": "04", "name": "Caravelí" },
+  { "id_prov": "0404", "id_depa": "04", "name": "Castilla" },
+  { "id_prov": "0405", "id_depa": "04", "name": "Caylloma" },
+  { "id_prov": "0406", "id_depa": "04", "name": "Condesuyos" },
+  { "id_prov": "0407", "id_depa": "04", "name": "Islay" },
+  { "id_prov": "0408", "id_depa": "04", "name": "La Unión" },
+  { "id_prov": "0701", "id_depa": "07", "name": "Callao" }
+]

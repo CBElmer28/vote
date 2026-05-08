@@ -21,9 +21,17 @@ CREATE TABLE IF NOT EXISTS roles (
 CREATE TABLE IF NOT EXISTS users (
     id              INT           AUTO_INCREMENT PRIMARY KEY,
     first_name      VARCHAR(100)  NOT NULL,
-    last_name       VARCHAR(100)  NOT NULL,
+    paternal_last_name VARCHAR(100) NOT NULL,
+    maternal_last_name VARCHAR(100) NOT NULL,
+    dob             DATE          NOT NULL,
     dni             CHAR(8)       NOT NULL UNIQUE COMMENT '8-digit national ID',
-    email           VARCHAR(150)  NOT NULL UNIQUE,
+    email           VARCHAR(150)  UNIQUE,
+    phone           VARCHAR(20),
+    country_residence VARCHAR(100) NOT NULL DEFAULT 'Perú',
+    department_id   VARCHAR(2),
+    province_id     VARCHAR(4),
+    district_id     VARCHAR(6),
+    address         VARCHAR(255),
     photo_url       VARCHAR(255)  COMMENT 'Reference photo for face verification',
     fingerprint_hash VARCHAR(255) COMMENT 'Stored fingerprint template/hash for biometric match',
     is_active       BOOLEAN       NOT NULL DEFAULT TRUE,
@@ -42,6 +50,8 @@ CREATE TABLE IF NOT EXISTS candidates (
     full_name   VARCHAR(100) NOT NULL,
     party       VARCHAR(100),
     photo_url   VARCHAR(255),
+    party_symbol_url VARCHAR(255),
+    members     JSON         COMMENT 'Presidential ticket [ {name, role, photo}, ... ]',
     description TEXT         COMMENT 'Bio or campaign summary',
     is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
     created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP,
@@ -83,6 +93,6 @@ INSERT IGNORE INTO roles (id, name, description) VALUES
 (1, 'ADMIN', 'Administrator full access'),
 (2, 'VOTER', 'Standard voter');
 
-INSERT IGNORE INTO users (first_name, last_name, dni, email, role_id) VALUES 
-('Admin', 'System', '00000000', 'admin@votesystem.local', 1),
-('Test', 'User', '11111111', 'test@votesystem.local', 2);
+INSERT IGNORE INTO users (first_name, paternal_last_name, maternal_last_name, dob, dni, email, role_id) VALUES 
+('Admin', 'System', 'Root', '1980-01-01', '00000000', 'admin@votesystem.local', 1),
+('Test', 'User', 'Demo', '1990-01-01', '11111111', 'test@votesystem.local', 2);

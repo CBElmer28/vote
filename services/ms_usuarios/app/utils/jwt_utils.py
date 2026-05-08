@@ -26,7 +26,7 @@ def generate_token(user: dict, expires_hours: int = 8) -> str:
     payload = {
         "sub":  user["id"],
         "dni":  user["dni"],
-        "name": f"{user['first_name']} {user['last_name']}",
+        "name": f"{user['first_name']} {user['paternal_last_name']} {user['maternal_last_name']}",
         "role": user.get("role", "VOTER"),
         "iat":  datetime.datetime.utcnow(),
         "exp":  datetime.datetime.utcnow() + datetime.timedelta(hours=expires_hours),

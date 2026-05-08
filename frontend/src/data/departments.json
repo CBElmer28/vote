@@ -1,0 +1,13 @@
+[
+  { "id_depa": "01", "name": "Amazonas" },
+  { "id_depa": "02", "name": "Áncash" },
+  { "id_depa": "04", "name": "Arequipa" },
+  { "id_depa": "07", "name": "Callao" },
+  { "id_depa": "08", "name": "Cusco" },
+  { "id_depa": "11", "name": "Ica" },
+  { "id_depa": "13", "name": "La Libertad" },
+  { "id_depa": "14", "name": "Lambayeque" },
+  { "id_depa": "15", "name": "Lima" },
+  { "id_depa": "20", "name": "Piura" },
+  { "id_depa": "21", "name": "Puno" }
+]

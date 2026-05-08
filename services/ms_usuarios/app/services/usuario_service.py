@@ -31,7 +31,7 @@ class UserService:
 
     def create_user(self, data: dict):
         # Required fields
-        for field in ["first_name", "last_name", "dni", "email"]:
+        for field in ["first_name", "paternal_last_name", "maternal_last_name", "dob", "dni"]:
             if not data.get(field):
                 return None, f"Field '{field}' is required"
 

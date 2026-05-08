@@ -6,8 +6,10 @@ import {
   X, Check, AlertCircle, Loader2, User, 
   UserPlus, UserMinus, Info, Layout, Upload, Camera
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function PartyManager() {
+  const { t } = useTranslation();
   const [parties, setParties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,7 +54,7 @@ export default function PartyManager() {
       setParties(adaptedData);
     } catch (err) {
       console.error("Failed to fetch parties", err);
-      setError('Error al cargar partidos políticos');
+      setError(t('admin.err_fetch'));
     } finally {
       setLoading(false);
     }
@@ -120,13 +122,13 @@ export default function PartyManager() {
     const extension = file.name.split('.').pop().toLowerCase();
 
     if (!allowedTypes.includes(file.type) || !allowedExtensions.includes(extension)) {
-      setError('Formato no permitido. Solo se aceptan JPG, JPEG y PNG.');
+      setError(t('admin.err_format'));
       return;
     }
 
     // 2. Limit size (optional but recommended, e.g., 2MB)
     if (file.size > 2 * 1024 * 1024) {
-      setError('La imagen es demasiado grande. Máximo 2MB.');
+      setError(t('admin.err_size'));
       return;
     }
 
@@ -153,7 +155,6 @@ export default function PartyManager() {
         party_symbol_url: currentParty.symbol_url,
         full_name: currentParty.members.find(m => m.role === 'Presidente')?.name || currentParty.name,
         photo_url: currentParty.members.find(m => m.role === 'Presidente')?.photo || '',
-        party_symbol_url: currentParty.symbol_url, // Duplicate for clarity in backend
         members: currentParty.members,
         is_active: currentParty.is_active
       };
@@ -166,7 +167,7 @@ export default function PartyManager() {
       setShowModal(false);
       fetchParties();
     } catch (err) {
-      setError('Error al procesar la solicitud.');
+      setError(t('admin.err_process'));
     } finally {
       setIsSubmitting(false);
     }
@@ -184,11 +185,11 @@ export default function PartyManager() {
       {/* Header */}
       <div className="flex justify-between items-center mb-10">
         <div>
-          <h1 className="text-4xl font-black mb-1 tracking-tight">Gestión de Partidos</h1>
-          <p className="text-text-muted font-medium italic">Administre la identidad y las listas de candidatos oficiales.</p>
+          <h1 className="text-4xl font-black mb-1 tracking-tight">{t('admin.parties_title')}</h1>
+          <p className="text-text-muted font-medium italic">{t('admin.parties_desc')}</p>
         </div>
         <button className="glass-button !w-auto px-8 py-4 shadow-xl" onClick={() => handleOpenModal()}>
-          <Plus size={20} /> Nueva Inscripción
+          <Plus size={20} /> {t('admin.new_party')}
         </button>
       </div>
 
@@ -196,7 +197,7 @@ export default function PartyManager() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-32 gap-4">
           <Loader2 className="animate-spin text-primary-blue" size={48} />
-          <p className="text-text-muted font-bold uppercase tracking-widest text-xs">Cargando datos institucionales...</p>
+          <p className="text-text-muted font-bold uppercase tracking-widest text-xs">{t('admin.loading_parties')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -215,14 +216,14 @@ export default function PartyManager() {
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${party.is_active ? 'bg-success-emerald' : 'bg-danger-rose'}`} />
                     <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">
-                      {party.is_active ? 'Vigente' : 'Inhabilitado'}
+                      {party.is_active ? t('admin.active') : t('admin.inactive')}
                     </span>
                   </div>
                 </div>
               </div>
               <div className="bg-bg-main/50 p-6 border-t border-surface-border flex gap-3">
                 <button onClick={() => handleOpenModal(party)} className="glass-button !py-3 flex-1 !text-xs !bg-primary-navy/5 !text-primary-navy hover:!bg-primary-navy hover:!text-white shadow-none">
-                  <Edit2 size={16} /> Configurar
+                  <Edit2 size={16} /> {t('admin.configure')}
                 </button>
                 <button className="p-3 border-2 border-surface-border text-danger-rose rounded-xl hover:bg-danger-rose/10 transition-all">
                   <Trash2 size={16} />
@@ -259,8 +260,8 @@ export default function PartyManager() {
                   <input type="file" ref={partySymbolRef} className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'party')} />
                 </div>
                 <div>
-                  <h2 className="text-3xl font-black tracking-tight">{editingId ? currentParty.name || 'Edición' : 'Inscripción de Partido'}</h2>
-                  <p className="text-white/60 font-bold text-xs uppercase tracking-[0.2em] mt-1">Registro Central de Organizaciones Políticas</p>
+                  <h2 className="text-3xl font-black tracking-tight">{editingId ? currentParty.name || t('admin.modal_title_edit') : t('admin.modal_title_new')}</h2>
+                  <p className="text-white/60 font-bold text-xs uppercase tracking-[0.2em] mt-1">{t('admin.modal_subtitle')}</p>
                 </div>
               </div>
               <button onClick={() => setShowModal(false)} className="p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all">
@@ -270,8 +271,8 @@ export default function PartyManager() {
 
             {/* Tabs */}
             <div className="flex bg-bg-main px-10 pt-2 shrink-0 border-b border-surface-border">
-              <Tab active={activeTab === 'general'} onClick={() => setActiveTab('general')} icon={<Info size={18} />} label="Identidad" />
-              <Tab active={activeTab === 'members'} onClick={() => setActiveTab('members')} icon={<Users size={18} />} label="Plancha Presidencial" />
+              <Tab active={activeTab === 'general'} onClick={() => setActiveTab('general')} icon={<Info size={18} />} label={t('admin.tab_identity')} />
+              <Tab active={activeTab === 'members'} onClick={() => setActiveTab('members')} icon={<Users size={18} />} label={t('admin.tab_members')} />
             </div>
 
             <div className="p-12 overflow-y-auto flex-1">
@@ -283,10 +284,10 @@ export default function PartyManager() {
               {activeTab === 'general' ? (
                 <div className="max-w-2xl mx-auto space-y-10 animate-fade-in">
                   <div className="space-y-3">
-                    <label className="text-xs font-black uppercase tracking-widest opacity-60 px-1">Denominación Oficial</label>
+                    <label className="text-xs font-black uppercase tracking-widest opacity-60 px-1">{t('admin.party_name')}</label>
                     <div className="input-wrapper">
                       <Shield className="input-icon" />
-                      <input className="glass-input" value={currentParty.name} onChange={e => setCurrentParty({...currentParty, name: e.target.value})} placeholder="Nombre completo del partido" />
+                      <input className="glass-input" value={currentParty.name} onChange={e => setCurrentParty({...currentParty, name: e.target.value})} placeholder={t('admin.party_name_placeholder')} />
                     </div>
                   </div>
                   <div className="flex flex-col gap-8 p-10 bg-primary-blue/5 rounded-[3.5rem] border border-primary-blue/10 items-center text-center">
@@ -298,17 +299,17 @@ export default function PartyManager() {
                       )}
                     </div>
                     <div>
-                      <h4 className="text-lg font-black mb-1">Actualizar Símbolo Oficial</h4>
-                      <p className="text-xs text-text-muted font-medium mb-6">Formatos permitidos: JPG, PNG. Máximo 2MB.</p>
+                      <h4 className="text-lg font-black mb-1">{t('admin.update_symbol')}</h4>
+                      <p className="text-xs text-text-muted font-medium mb-6">{t('admin.symbol_formats')}</p>
                       <button onClick={() => partySymbolRef.current.click()} className="glass-button !w-auto !py-3.5 px-8 !text-xs shadow-xl">
-                        <Upload size={16} /> Seleccionar Archivo de Mi Equipo
+                        <Upload size={16} /> {t('admin.select_file')}
                       </button>
                     </div>
                   </div>
                   <div className="flex items-center justify-between p-8 bg-white border border-surface-border rounded-3xl shadow-sm">
                     <div>
-                      <h4 className="text-sm font-black mb-1">Estado de Habilitación</h4>
-                      <p className="text-xs text-text-muted">Determina si el partido aparece en la cédula.</p>
+                      <h4 className="text-sm font-black mb-1">{t('admin.status')}</h4>
+                      <p className="text-xs text-text-muted">{t('admin.status_desc')}</p>
                     </div>
                     <button 
                       onClick={() => setCurrentParty({...currentParty, is_active: !currentParty.is_active})}
@@ -316,20 +317,20 @@ export default function PartyManager() {
                         currentParty.is_active ? 'bg-success-emerald text-white' : 'bg-danger-rose text-white'
                       }`}
                     >
-                      {currentParty.is_active ? 'Habilitado' : 'Suspendido'}
+                      {currentParty.is_active ? t('admin.enabled') : t('admin.suspended')}
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="animate-fade-in space-y-6">
                   <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-black">Miembros de la Lista</h3>
+                    <h3 className="text-xl font-black">{t('admin.members_title')}</h3>
                     <div className="flex items-center gap-4">
                       <div className="text-xs font-bold text-text-muted bg-bg-main px-4 py-2 rounded-full border border-surface-border">
-                        {currentParty.members.length} Candidatos Definidos
+                        {currentParty.members.length} {t('admin.defined_candidates')}
                       </div>
                       <button onClick={addMember} className="glass-button !py-2 !px-4 !text-[10px] !w-auto">
-                        <UserPlus size={14} /> Añadir Miembro
+                        <UserPlus size={14} /> {t('admin.add_member')}
                       </button>
                     </div>
                   </div>
@@ -337,10 +338,10 @@ export default function PartyManager() {
                     <table className="w-full text-left">
                       <thead>
                         <tr className="bg-bg-main/80">
-                          <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest opacity-50">Cargo</th>
-                          <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest opacity-50">Candidato</th>
-                          <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest opacity-50">Fotografía</th>
-                          <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest opacity-50 text-right">Acción</th>
+                          <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest opacity-50">{t('admin.role_header')}</th>
+                          <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest opacity-50">{t('admin.candidate')}</th>
+                          <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest opacity-50">{t('admin.photo')}</th>
+                          <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest opacity-50 text-right">{t('admin.action')}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-surface-border">
@@ -356,7 +357,7 @@ export default function PartyManager() {
                                   }`}
                                   value={member.role}
                                   onChange={(e) => updateMember(member.id, 'role', e.target.value)}
-                                  placeholder="Cargo..."
+                                  placeholder={t('admin.role_placeholder')}
                                 />
                                 <div className="absolute -right-1 -top-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
                                   <Edit2 size={10} className="text-primary-blue/40" />
@@ -368,7 +369,7 @@ export default function PartyManager() {
                                 className="w-full bg-transparent border-b-2 border-transparent focus:border-primary-blue/30 outline-none font-bold py-2 px-1 transition-all focus:bg-primary-blue/[0.03] rounded-t-lg"
                                 value={member.name}
                                 onChange={(e) => updateMember(member.id, 'name', e.target.value)}
-                                placeholder="Nombre completo del candidato..."
+                                placeholder={t('admin.candidate_placeholder')}
                               />
                             </td>
                             <td className="px-8 py-6">
@@ -385,9 +386,9 @@ export default function PartyManager() {
                                   </button>
                                 </div>
                                 <div className="flex flex-col">
-                                  <span className="text-[9px] font-black uppercase tracking-tighter opacity-40">Archivo</span>
+                                  <span className="text-[9px] font-black uppercase tracking-tighter opacity-40">{t('admin.file')}</span>
                                   <span className="text-[10px] font-bold text-primary-blue truncate max-w-[120px]">
-                                    {member.photo?.startsWith('data:') ? 'Imagen Cargada ✓' : (member.photo ? 'En Servidor ✓' : 'Pendiente')}
+                                    {member.photo?.startsWith('data:') ? t('admin.image_loaded') : (member.photo ? t('admin.on_server') : t('admin.pending'))}
                                   </span>
                                 </div>
                               </div>
@@ -414,12 +415,12 @@ export default function PartyManager() {
             <div className="p-10 bg-bg-main border-t border-surface-border flex justify-between items-center shrink-0">
               <div className="flex items-center gap-3 text-text-muted/60">
                 <AlertCircle size={20} />
-                <span className="text-[10px] font-black uppercase tracking-tight">Sincronización encriptada con el servidor central</span>
+                <span className="text-[10px] font-black uppercase tracking-tight">{t('admin.sync_encrypted')}</span>
               </div>
               <div className="flex gap-4">
-                <button onClick={() => setShowModal(false)} className="glass-button secondary !w-auto px-10 !h-14">Cancelar</button>
+                <button onClick={() => setShowModal(false)} className="glass-button secondary !w-auto px-10 !h-14">{t('admin.cancel')}</button>
                 <button onClick={handleSave} className="glass-button !w-auto px-14 !h-14 shadow-2xl" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="animate-spin" /> : 'Confirmar Cambios'}
+                  {isSubmitting ? <Loader2 className="animate-spin" /> : t('admin.confirm_changes')}
                 </button>
               </div>
             </div>

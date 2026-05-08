@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from app.services.analisis_service import AnalysisService
 
 analisis_bp = Blueprint("analysis", __name__)
@@ -13,7 +13,17 @@ def health():
 @analisis_bp.route("/summary", methods=["GET"])
 def summary():
     """GET /api/analisis/summary — Returns vote counts and biometric audit data."""
-    return jsonify({"data": service.summary()}), 200
+    filters = {}
+    if request.args.get("country"):
+        filters["country"] = request.args.get("country")
+    if request.args.get("department"):
+        filters["department"] = request.args.get("department")
+    if request.args.get("province"):
+        filters["province"] = request.args.get("province")
+    if request.args.get("district"):
+        filters["district"] = request.args.get("district")
+        
+    return jsonify({"data": service.summary(**filters)}), 200
 
 
 @analisis_bp.route("/charts/bar", methods=["GET"])

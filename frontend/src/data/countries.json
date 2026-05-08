@@ -1,0 +1,12 @@
+[
+  { "id": "PE", "name": "Perú" },
+  { "id": "US", "name": "Estados Unidos" },
+  { "id": "ES", "name": "España" },
+  { "id": "AR", "name": "Argentina" },
+  { "id": "CL", "name": "Chile" },
+  { "id": "IT", "name": "Italia" },
+  { "id": "JP", "name": "Japón" },
+  { "id": "BR", "name": "Brasil" },
+  { "id": "CO", "name": "Colombia" },
+  { "id": "MX", "name": "México" }
+]

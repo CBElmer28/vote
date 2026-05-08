@@ -1,34 +1,33 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useAccessibility } from '../context/AccessibilityContext';
+import AccessibilityMenu from '../components/AccessibilityMenu';
 import Webcam from 'react-webcam';
 import { 
-  User, ShieldCheck, Globe, Moon, Sun, Vote, 
-  Mail, Fingerprint, Camera, ChevronRight, AlertCircle 
+  User, ShieldCheck, Globe, Moon, Sun, Vote, Accessibility,
+  Mail, Fingerprint, Camera, ChevronRight, AlertCircle, Loader2 
 } from 'lucide-react';
 
 export default function Login({ isAdminLogin = false }) {
   const [identifier, setIdentifier] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [theme, setTheme] = useState('light');
+  const { settings, toggleTheme } = useAccessibility();
+  const [showAccessibility, setShowAccessibility] = useState(false);
   const [step, setStep] = useState(1);
   
   const [photoUrl, setPhotoUrl] = useState(null);
   const [fingerprintFile, setFingerprintFile] = useState(null);
   const webcamRef = useRef(null);
 
+  const { t, i18n } = useTranslation();
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(theme === 'light' ? 'dark' : 'light');
-  };
-
+  // Accessibility settings are managed by the Provider via useEffect
+  
   const capture = useCallback(() => {
     const imageSrc = webcamRef.current.getScreenshot();
     if (imageSrc) setPhotoUrl(imageSrc);
@@ -76,17 +75,36 @@ export default function Login({ isAdminLogin = false }) {
       
       {/* Navbar Overlay */}
       <header className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10 max-w-7xl mx-auto w-full">
-        <div className="flex items-center gap-3 text-white">
-          <Globe size={20} />
-          <span className="font-semibold text-sm tracking-wider uppercase">Español</span>
+        <div className="relative group cursor-pointer">
+          <div className="flex items-center gap-3 text-white">
+            <Globe size={20} />
+            <span className="font-semibold text-sm tracking-wider uppercase">{t('login.language')}</span>
+          </div>
+          {/* Dropdown menu */}
+          <div className="absolute top-full left-0 mt-2 w-32 bg-white rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden border border-slate-100">
+            <button onClick={() => i18n.changeLanguage('es')} className="w-full text-left px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-primary-blue">ESPAÑOL</button>
+            <button onClick={() => i18n.changeLanguage('en')} className="w-full text-left px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-primary-blue">ENGLISH</button>
+            <button onClick={() => i18n.changeLanguage('qu')} className="w-full text-left px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-primary-blue">QUECHUA</button>
+          </div>
         </div>
-        <button 
-          onClick={toggleTheme} 
-          className="glass-button secondary !w-11 !h-11 !p-0 rounded-full !border-white/20 !bg-white/10 !text-white hover:!bg-white/20 transition-all"
-        >
-          {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowAccessibility(true)} 
+            className="glass-button secondary !w-11 !h-11 !p-0 rounded-full !border-white/20 !bg-white/10 !text-white hover:!bg-white/20 transition-all"
+            title="Accesibilidad"
+          >
+            <Accessibility size={20} />
+          </button>
+          <button 
+            onClick={toggleTheme} 
+            className="glass-button secondary !w-11 !h-11 !p-0 rounded-full !border-white/20 !bg-white/10 !text-white hover:!bg-white/20 transition-all"
+          >
+            {settings.theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+          </button>
+        </div>
       </header>
+
+      <AccessibilityMenu isOpen={showAccessibility} onClose={() => setShowAccessibility(false)} />
 
       <main className="animate-fade-in w-full max-w-[460px] transition-all duration-500" 
         style={{ maxWidth: step === 1 ? '460px' : '640px' }}>
@@ -94,13 +112,13 @@ export default function Login({ isAdminLogin = false }) {
         {/* Logo Section */}
         <div className="flex flex-col items-center mb-10 text-center">
           <div className="flex items-center gap-3 mb-2">
-            <div className="bg-white p-2.5 rounded-xl shadow-2xl">
+            <div className="bg-surface p-2.5 rounded-xl shadow-2xl">
               <Vote size={32} className="text-primary-navy" />
             </div>
             <h1 className="text-4xl font-extrabold text-white tracking-tight">VoteSystem</h1>
           </div>
           <p className="text-white/80 font-medium tracking-[0.1em] uppercase text-xs">
-            {isAdminLogin ? 'Portal Administrativo' : 'Portal de Votantes'}
+            {isAdminLogin ? t('login.admin_portal') : t('login.citizen_portal')}
           </p>
         </div>
 
@@ -124,20 +142,20 @@ export default function Login({ isAdminLogin = false }) {
           {step === 1 && (
             <form onSubmit={handleStep1} className="flex flex-col gap-6">
               <div className="text-center mb-2">
-                <h2 className="text-2xl font-extrabold text-text-main">Bienvenido</h2>
-                <p className="text-text-muted">Ingrese sus credenciales para continuar</p>
+                <h2 className="text-2xl font-extrabold text-text-main">{t('login.welcome')}</h2>
+                <p className="text-text-muted">{t('login.instruction')}</p>
               </div>
               
               <div className="space-y-2">
                 <label className="text-sm font-bold text-text-main block px-1">
-                  {isAdminLogin ? 'Correo Institucional' : 'DNI del Ciudadano'}
+                  {isAdminLogin ? t('login.admin_email') : t('login.citizen_dni')}
                 </label>
                 <div className="input-wrapper">
                   {isAdminLogin ? <Mail size={20} className="input-icon" /> : <User size={20} className="input-icon" />}
                   <input 
                     type={isAdminLogin ? "email" : "text"} 
                     className="glass-input" 
-                    placeholder={isAdminLogin ? "admin@elecciones.gob" : "Número de 8 dígitos"}
+                    placeholder={isAdminLogin ? t('login.email_placeholder') : t('login.dni_placeholder')}
                     value={identifier}
                     onChange={(e) => setIdentifier(isAdminLogin ? e.target.value : e.target.value.replace(/\D/g, ''))}
                     maxLength={isAdminLogin ? 100 : 8}
@@ -147,14 +165,14 @@ export default function Login({ isAdminLogin = false }) {
               </div>
 
               <button type="submit" className="glass-button !py-4" disabled={isLoading}>
-                {isLoading ? 'Verificando...' : isAdminLogin ? 'Continuar a Biometría' : 'Ingresar al Sistema'}
+                {isLoading ? t('login.verifying') : isAdminLogin ? t('login.continue_biometrics') : t('login.enter_system')}
                 {!isLoading && <ChevronRight size={20} />}
               </button>
 
               {!isAdminLogin && (
                 <div className="text-center border-t border-surface-border pt-6 mt-2">
                   <Link to="/admin/login" className="text-primary-blue font-bold hover:underline text-sm">
-                    ¿Eres administrador? Accede aquí
+                    {t('login.admin_link')}
                   </Link>
                 </div>
               )}
@@ -241,7 +259,7 @@ export default function Login({ isAdminLogin = false }) {
 
         <div className="flex items-center justify-center gap-3 mt-10 text-white/70 text-sm font-semibold">
           <ShieldCheck size={18} className="text-success-emerald" />
-          <span>Encriptación de grado militar activa</span>
+          <span>{t('login.encryption')}</span>
         </div>
       </main>
     </div>

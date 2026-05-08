@@ -1,5 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { AccessibilityProvider } from './context/AccessibilityContext';
+import AccessibilityGlobalEffects from './components/AccessibilityGlobalEffects';
 
 // Pages
 import Login from './pages/Login';
@@ -30,40 +32,43 @@ const AdminRoute = ({ children }) => {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={<Login />} />
-          <Route 
-            path="/vote" 
-            element={
-              <ProtectedRoute>
-                <Vote />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/results" 
-            element={
-              <ProtectedRoute>
-                <Results />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Admin Routes */}
-          <Route path="/admin/login" element={<Login isAdminLogin={true} />} />
-          <Route 
-            path="/admin/dashboard" 
-            element={
-              <AdminRoute>
-                <AdminDashboard />
-              </AdminRoute>
-            } 
-          />
-        </Routes>
-      </Router>
-    </AuthProvider>
+    <AccessibilityProvider>
+      <AccessibilityGlobalEffects />
+      <AuthProvider>
+        <Router>
+          <Routes>
+            <Route path="/" element={<Login />} />
+            <Route 
+              path="/vote" 
+              element={
+                <ProtectedRoute>
+                  <Vote />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/results" 
+              element={
+                <ProtectedRoute>
+                  <Results />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Admin Routes */}
+            <Route path="/admin/login" element={<Login isAdminLogin={true} />} />
+            <Route 
+              path="/admin/dashboard" 
+              element={
+                <AdminRoute>
+                  <AdminDashboard />
+                </AdminRoute>
+              } 
+            />
+          </Routes>
+        </Router>
+      </AuthProvider>
+    </AccessibilityProvider>
   );
 }
 

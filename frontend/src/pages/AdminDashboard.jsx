@@ -3,11 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Register from './Register';
 import CandidateManager from '../components/CandidateManager';
-import { Users, LogOut, FileText, LayoutDashboard, ChevronRight, UserCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Users, LogOut, FileText, LayoutDashboard, ChevronRight, UserCircle, Globe, Accessibility, Moon, Sun } from 'lucide-react';
+import { useAccessibility } from '../context/AccessibilityContext';
+import AccessibilityMenu from '../components/AccessibilityMenu';
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { settings, toggleTheme } = useAccessibility();
+  const [showAccessibility, setShowAccessibility] = useState(false);
   const [activeTab, setActiveTab] = useState('voters');
 
   const handleLogout = () => {
@@ -21,11 +27,37 @@ export default function AdminDashboard() {
       {/* Sidebar */}
       <aside className="w-72 h-full bg-primary-navy border-r border-white/10 p-8 flex flex-col z-20 shadow-2xl shrink-0 text-white">
         {/* Brand */}
-        <div className="flex items-center gap-3 mb-12">
-          <div className="bg-white text-primary-navy p-2 rounded-xl shadow-lg">
-            <LayoutDashboard size={22} />
+        <div className="flex items-center gap-3 mb-8">
+          <h2 className="text-xl font-black tracking-tight uppercase text-white">{t('admin.portal')}</h2>
+        </div>
+
+        {/* Global Controls */}
+        <div className="flex items-center gap-3 mb-8">
+          <button 
+            onClick={() => setShowAccessibility(true)} 
+            className="flex-1 flex items-center justify-center gap-2 p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-all text-white font-bold text-xs"
+          >
+            <Accessibility size={16} /> ACCESIBILIDAD
+          </button>
+          <button 
+            onClick={toggleTheme} 
+            className="p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-all text-white"
+          >
+            {settings.theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
+        </div>
+
+        {/* Language Switcher */}
+        <div className="relative group cursor-pointer z-50 mb-8">
+          <div className="flex items-center gap-2 px-4 py-3 bg-white/10 border border-white/10 rounded-2xl shadow-sm hover:bg-white/20 transition-all text-white font-bold text-sm uppercase">
+            <Globe size={18} />
+            <span>{t('login.language')}</span>
           </div>
-          <h2 className="text-xl font-black tracking-tight uppercase text-white">Admin Portal</h2>
+          <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden border border-slate-100">
+            <button onClick={() => i18n.changeLanguage('es')} className="w-full text-left px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-primary-blue">ESPAÑOL</button>
+            <button onClick={() => i18n.changeLanguage('en')} className="w-full text-left px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-primary-blue">ENGLISH</button>
+            <button onClick={() => i18n.changeLanguage('qu')} className="w-full text-left px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-primary-blue">QUECHUA</button>
+          </div>
         </div>
 
         {/* Profile Summary */}
@@ -37,7 +69,7 @@ export default function AdminDashboard() {
             <span className="text-sm font-bold text-white truncate">
               {user?.first_name} {user?.last_name}
             </span>
-            <span className="text-[10px] text-white/60 font-black uppercase tracking-widest">Administrador</span>
+            <span className="text-[10px] text-white/60 font-black uppercase tracking-widest">{t('admin.role')}</span>
           </div>
         </div>
 
@@ -46,14 +78,14 @@ export default function AdminDashboard() {
             active={activeTab === 'voters'} 
             onClick={() => setActiveTab('voters')}
             icon={<Users size={20} />}
-            label="Empadronar Votante"
+            label={t('admin.register_voter')}
           />
           
           <SidebarButton 
             active={activeTab === 'candidates'} 
             onClick={() => setActiveTab('candidates')}
             icon={<FileText size={20} />}
-            label="Gestión de Candidatos"
+            label={t('admin.manage_candidates')}
           />
         </nav>
 
@@ -64,7 +96,7 @@ export default function AdminDashboard() {
           <div className="p-2 bg-white/10 rounded-lg group-hover:bg-danger-rose/30 transition-colors">
             <LogOut size={18} />
           </div>
-          Cerrar Sesión
+          {t('admin.logout')}
         </button>
       </aside>
 
@@ -80,6 +112,8 @@ export default function AdminDashboard() {
           <CandidateManager />
         )}
       </main>
+
+      <AccessibilityMenu isOpen={showAccessibility} onClose={() => setShowAccessibility(false)} />
     </div>
   );
 }

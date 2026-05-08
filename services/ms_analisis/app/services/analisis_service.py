@@ -12,10 +12,11 @@ class AnalysisService:
     def __init__(self):
         self.repo = AnalysisRepository()
 
-    def summary(self) -> dict:
+    def summary(self, **filters) -> dict:
         return {
-            "total_votes":         self.repo.total_votes(),
-            "count_by_candidate":  self.repo.count_by_candidate(),
+            "total_votes":         self.repo.total_votes(**filters),
+            "total_voters":        self.repo.total_voters(**filters),
+            "count_by_candidate":  self.repo.count_by_candidate(**filters),
             "votes_per_hour":      self.repo.votes_per_hour(),
             "biometric_audit":     self.repo.biometric_audit(),
         }
