@@ -13,7 +13,18 @@
     "encryption": "Military-grade encryption active",
     "citizen_portal": "Voter Portal",
     "admin_portal": "Admin Portal",
-    "language": "ENGLISH"
+    "language": "ENGLISH",
+    "validate_identity": "Validate Identity",
+    "barcode_validation": "ID Validation",
+    "barcode_instruction": "Scan the barcode on your physical ID card",
+    "barcode_scan": "Scan Code",
+    "barcode_rescan": "Re-scan Code",
+    "barcode_detected": "Code detected",
+    "confirm_enter": "Confirm and Enter",
+    "barcode_mismatch": "The barcode ({{scanned}}) does not match the entered ID ({{entered}}).",
+    "barcode_modal_title": "Scan Barcode",
+    "barcode_modal_desc": "Place your ID's barcode in front of the camera.",
+    "cancel": "Cancel"
   },
   "results": {
     "title": "Electoral Results",
@@ -48,6 +59,7 @@
     "citizen": "Citizen:",
     "step_face": "Facial Identity",
     "step_finger": "Fingerprint",
+    "step_barcode": "ID Validation",
     "step_vote": "Voting",
     "face_title": "1. Facial Verification",
     "face_desc": "Ensure good lighting before capturing",

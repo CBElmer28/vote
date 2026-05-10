@@ -5,7 +5,8 @@ import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { CandidateCard } from '../components/CandidateCard';
-import { Camera, Fingerprint, CheckCircle, ChevronRight, Check, AlertCircle, User, Loader2, Accessibility, Moon, Sun } from 'lucide-react';
+import { Camera, Fingerprint, CheckCircle, ChevronRight, Check, AlertCircle, User, Loader2, Accessibility, Moon, Sun, Barcode } from 'lucide-react';
+import BarcodeScanner from '../components/BarcodeScanner';
 import { useAccessibility } from '../context/AccessibilityContext';
 import AccessibilityMenu from '../components/AccessibilityMenu';
 
@@ -22,6 +23,8 @@ export default function Vote() {
   const [photoUrl, setPhotoUrl] = useState(null);
   const [fingerprintFile, setFingerprintFile] = useState(null);
   const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
+  const [scannedDni, setScannedDni] = useState('');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -79,6 +82,21 @@ export default function Vote() {
     }
   };
 
+  const handleBarcodeScan = (decodedText) => {
+    // Extract 8 digits
+    const dniMatch = decodedText.match(/\d{8}/);
+    const extractedDni = dniMatch ? dniMatch[0] : decodedText;
+    
+    setScannedDni(extractedDni);
+    setIsBarcodeScannerOpen(false);
+    
+    if (extractedDni === user.dni) {
+      setError('');
+    } else {
+      setError(t('login.barcode_mismatch', { scanned: extractedDni, entered: user.dni }));
+    }
+  };
+
   if (hasVoted) return null;
 
   return (
@@ -101,11 +119,13 @@ export default function Vote() {
 
         {/* Progress Stepper */}
         <div className="flex items-center justify-center gap-4 mb-16">
-          <StepIcon active={step === 1} done={step > 1} icon={<Camera size={20} />} label={t('vote.step_face')} />
-          <div className={`h-0.5 w-16 transition-colors duration-500 ${step > 1 ? 'bg-success-emerald' : 'bg-surface-border'}`} />
-          <StepIcon active={step === 2} done={step > 2} icon={<Fingerprint size={20} />} label={t('vote.step_finger')} />
-          <div className={`h-0.5 w-16 transition-colors duration-500 ${step > 2 ? 'bg-success-emerald' : 'bg-surface-border'}`} />
-          <StepIcon active={step === 3} done={false} icon={<CheckCircle size={20} />} label={t('vote.step_vote')} />
+          <StepIcon active={step === 1} done={step > 1} icon={<Barcode size={20} />} label={t('vote.step_barcode')} />
+          <div className={`h-0.5 w-10 transition-colors duration-500 ${step > 1 ? 'bg-success-emerald' : 'bg-surface-border'}`} />
+          <StepIcon active={step === 2} done={step > 2} icon={<Camera size={20} />} label={t('vote.step_face')} />
+          <div className={`h-0.5 w-10 transition-colors duration-500 ${step > 2 ? 'bg-success-emerald' : 'bg-surface-border'}`} />
+          <StepIcon active={step === 3} done={step > 3} icon={<Fingerprint size={20} />} label={t('vote.step_finger')} />
+          <div className={`h-0.5 w-10 transition-colors duration-500 ${step > 3 ? 'bg-success-emerald' : 'bg-surface-border'}`} />
+          <StepIcon active={step === 4} done={false} icon={<CheckCircle size={20} />} label={t('vote.step_vote')} />
         </div>
 
         {error && (
@@ -114,8 +134,47 @@ export default function Vote() {
           </div>
         )}
 
-        {/* STEP 1: FACE PHOTO */}
+        {/* STEP 1: BARCODE VALIDATION */}
         {step === 1 && (
+          <div className="animate-fade-in flat-card max-w-2xl mx-auto text-center !p-10">
+            <div className="mb-8">
+              <h2 className="text-2xl font-black text-text-main mb-1">{t('login.barcode_validation')}</h2>
+              <p className="text-text-muted">{t('login.barcode_instruction')}</p>
+            </div>
+
+            <div className={`flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-3xl mb-10 transition-all duration-300 ${
+              scannedDni && scannedDni === user.dni ? 'bg-success-emerald/5 border-success-emerald' : 'bg-bg-main border-surface-border'
+            }`}>
+              <Barcode 
+                size={80} 
+                className={`transition-all duration-500 mb-6 ${scannedDni && scannedDni === user.dni ? 'text-success-emerald scale-110' : 'text-primary-navy/30'}`} 
+              />
+              
+              <button 
+                onClick={() => setIsBarcodeScannerOpen(true)}
+                className="glass-button secondary !w-auto py-2.5 px-8"
+              >
+                {scannedDni ? t('login.barcode_rescan') : t('login.barcode_scan')}
+              </button>
+              
+              {scannedDni && (
+                <div className={`mt-6 font-black text-sm flex items-center gap-2 ${scannedDni === user.dni ? 'text-success-emerald animate-bounce' : 'text-danger-rose'}`}>
+                  {scannedDni === user.dni ? <Check size={18} /> : <AlertCircle size={18} />}
+                  {scannedDni === user.dni ? `${t('login.barcode_detected')}: ${scannedDni}` : 'DNI No Coincide'}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-center gap-4">
+              <button className="glass-button !w-auto px-10" onClick={() => setStep(2)} disabled={!scannedDni || scannedDni !== user.dni}>
+                {t('vote.confirm_continue')} <ChevronRight size={20} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: FACE PHOTO */}
+        {step === 2 && (
           <div className="animate-fade-in flat-card max-w-2xl mx-auto text-center !p-10">
             <div className="mb-8">
               <h2 className="text-2xl font-black text-text-main mb-1">{t('vote.face_title')}</h2>
@@ -139,15 +198,20 @@ export default function Vote() {
 
             <div className="flex justify-center gap-4">
               {!photoUrl ? (
-                <button className="glass-button !w-auto px-10" onClick={capture}>
-                  <Camera size={20} /> {t('vote.capture_photo')}
-                </button>
+                <>
+                  <button className="glass-button secondary !w-auto px-8" onClick={() => setStep(1)}>
+                    {t('vote.back')}
+                  </button>
+                  <button className="glass-button !w-auto px-10" onClick={capture}>
+                    <Camera size={20} /> {t('vote.capture_photo')}
+                  </button>
+                </>
               ) : (
                 <>
                   <button className="glass-button secondary !w-auto px-8" onClick={() => setPhotoUrl(null)}>
                     {t('vote.retry')}
                   </button>
-                  <button className="glass-button !w-auto px-10" onClick={() => setStep(2)}>
+                  <button className="glass-button !w-auto px-10" onClick={() => setStep(3)}>
                     {t('vote.confirm_continue')} <ChevronRight size={20} />
                   </button>
                 </>
@@ -156,8 +220,8 @@ export default function Vote() {
           </div>
         )}
 
-        {/* STEP 2: FINGERPRINT */}
-        {step === 2 && (
+        {/* STEP 3: FINGERPRINT */}
+        {step === 3 && (
           <div className="animate-fade-in flat-card max-w-2xl mx-auto text-center !p-10">
             <div className="mb-8">
               <h2 className="text-2xl font-black text-text-main mb-1">{t('vote.finger_title')}</h2>
@@ -185,16 +249,16 @@ export default function Vote() {
             </div>
 
             <div className="flex justify-center gap-4">
-              <button className="glass-button secondary !w-auto px-8" onClick={() => setStep(1)}>{t('vote.back')}</button>
-              <button className="glass-button !w-auto px-10" onClick={() => setStep(3)} disabled={!fingerprintFile}>
+              <button className="glass-button secondary !w-auto px-8" onClick={() => setStep(2)}>{t('vote.back')}</button>
+              <button className="glass-button !w-auto px-10" onClick={() => setStep(4)} disabled={!fingerprintFile}>
                 {t('vote.continue_vote')} <ChevronRight size={20} />
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 3: CANDIDATE SELECTION */}
-        {step === 3 && (
+        {/* STEP 4: CANDIDATE SELECTION */}
+        {step === 4 && (
           <div className="animate-fade-in">
             <div className="text-center mb-12">
               <h2 className="text-3xl font-black text-text-main mb-1 tracking-tight">{t('vote.select_candidate_title')}</h2>
@@ -213,7 +277,7 @@ export default function Vote() {
             </div>
 
             <div className="flex items-center justify-center gap-6 pt-10 border-t border-surface-border">
-              <button className="glass-button secondary !w-auto px-12 py-3.5" onClick={() => setStep(2)}>
+              <button className="glass-button secondary !w-auto px-12 py-3.5" onClick={() => setStep(3)}>
                 {t('vote.back')}
               </button>
               <button 
@@ -250,6 +314,13 @@ export default function Vote() {
       </div>
 
       <AccessibilityMenu isOpen={showAccessibility} onClose={() => setShowAccessibility(false)} />
+
+      <BarcodeScanner 
+        isOpen={isBarcodeScannerOpen} 
+        onClose={() => setIsBarcodeScannerOpen(false)}
+        onScanSuccess={handleBarcodeScan}
+        onScanError={(err) => console.error(err)}
+      />
     </div>
   );
 }
