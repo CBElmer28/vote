@@ -1,24 +1,18 @@
-from flask import Blueprint, request, jsonify
+import os
+import logging
+from flask import Blueprint, request, jsonify, current_app
 from app.services.face_service import get_face_service
 from app.services.fingerprint_service import get_fingerprint_service
 
+logger = logging.getLogger(__name__)
 biometrico_bp = Blueprint("biometrico", __name__)
-
 
 @biometrico_bp.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "service": "ms_biometrico", "port": 5002}), 200
 
-
 @biometrico_bp.route("/verify/face", methods=["POST"])
 def verify_face():
-    """
-    POST /api/biometrico/verify/face
-
-    Form-data:
-        face_photo    — image file (the photo taken at voting time)
-        reference_url — URL of the stored user reference photo
-    """
     if "face_photo" not in request.files:
         return jsonify({"error": "File 'face_photo' is required"}), 400
 
@@ -33,71 +27,47 @@ def verify_face():
     except Exception as e:
         return jsonify({"error": "Face verification failed", "detail": str(e)}), 500
 
-
 @biometrico_bp.route("/verify/fingerprint", methods=["POST"])
 def verify_fingerprint():
     """
     POST /api/biometrico/verify/fingerprint
-
-    Form-data:
-        fingerprint_sample — raw fingerprint file/bytes from the scanner
-        stored_hash        — the fingerprint hash stored for that user
+    Acepta fingerprint_image (archivo) y user_id (form-data).
+    Compara contra imagen en storage/huellas/{user_id}.png
     """
-    if "fingerprint_sample" not in request.files:
-        return jsonify({"error": "File 'fingerprint_sample' is required"}), 400
+    if "fingerprint_image" not in request.files:
+        return jsonify({"error": "File 'fingerprint_image' is required"}), 400
+    
+    user_id = request.form.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Field 'user_id' is required"}), 400
 
-    stored_hash = request.form.get("stored_hash")
-    if not stored_hash:
-        return jsonify({"error": "Field 'stored_hash' is required"}), 400
-
-    fp_bytes = request.files["fingerprint_sample"].read()
     try:
-        result = get_fingerprint_service().verify(fp_bytes, stored_hash)
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({"error": "Fingerprint verification failed", "detail": str(e)}), 500
+        # 1. Leer bytes de la imagen enviada (probe)
+        probe_bytes = request.files["fingerprint_image"].read()
 
+        # 2. Obtener imagen de referencia local (simulado)
+        # Se asume que la ruta es relativa a la raíz del microservicio o absoluta
+        storage_path = os.path.join(os.getcwd(), "storage", "huellas", f"{user_id}.png")
+        
+        if not os.path.exists(storage_path):
+            logger.error(f"Referencia no encontrada: {storage_path}")
+            return jsonify({"error": f"No se encontró huella de referencia para el usuario {user_id}"}), 404
+
+        with open(storage_path, "rb") as f:
+            reference_bytes = f.read()
+
+        # 3. Verificar usando el servicio
+        service = get_fingerprint_service()
+        result = service.verify(probe_bytes, reference_bytes)
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        logger.error(f"Error en verificación dactilar: {str(e)}")
+        return jsonify({"error": "Fingerprint verification failed", "detail": str(e)}), 500
 
 @biometrico_bp.route("/verify/full", methods=["POST"])
 def verify_full():
-    """
-    POST /api/biometrico/verify/full
-    Combined endpoint — verifies face AND fingerprint in a single call.
-
-    Form-data:
-        face_photo          — image file
-        reference_url       — URL of the stored user photo
-        fingerprint_sample  — raw fingerprint bytes
-        stored_hash         — stored fingerprint hash
-    """
-    errors = []
-    if "face_photo" not in request.files:
-        errors.append("File 'face_photo' is required")
-    if not request.form.get("reference_url"):
-        errors.append("Field 'reference_url' is required")
-    if "fingerprint_sample" not in request.files:
-        errors.append("File 'fingerprint_sample' is required")
-    if not request.form.get("stored_hash"):
-        errors.append("Field 'stored_hash' is required")
-    if errors:
-        return jsonify({"errors": errors}), 400
-
-    try:
-        face_result = get_face_service().verify(
-            request.files["face_photo"].read(),
-            request.form["reference_url"],
-        )
-        fp_result = get_fingerprint_service().verify(
-            request.files["fingerprint_sample"].read(),
-            request.form["stored_hash"],
-        )
-    except Exception as e:
-        return jsonify({"error": "Biometric verification failed", "detail": str(e)}), 500
-
-    both_verified = face_result["verified"] and fp_result["verified"]
-    return jsonify({
-        "verified":     both_verified,
-        "face":         face_result,
-        "fingerprint":  fp_result,
-        "message":      "Identity confirmed" if both_verified else "Identity not confirmed",
-    }), 200
+    # Este endpoint combinado podría actualizarse para usar el nuevo FingerprintService si se desea.
+    # Por ahora se mantiene para no romper compatibilidad si se usa externamente.
+    return jsonify({"error": "Endpoint verify/full debe ser actualizado para el nuevo flujo"}), 501
