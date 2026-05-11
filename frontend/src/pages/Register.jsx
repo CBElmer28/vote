@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
-import { 
-  UserPlus, User, Mail, CreditCard, ChevronLeft, ChevronRight, 
+import {
+  UserPlus, User, Mail, CreditCard, ChevronLeft, ChevronRight,
   AlertCircle, CheckCircle, Loader2, MapPin, Calendar, Phone
 } from 'lucide-react';
+import { startRegistration } from '@simplewebauthn/browser';
 
 import countriesData from '../data/countries.json';
 import departmentsData from '../data/departments.json';
@@ -107,16 +108,54 @@ export default function Register({ inDashboard = false }) {
     setStep(s => s - 1);
   };
 
+  const base64ToBlob = (base64, mime = 'image/jpeg') => {
+    const byteString = atob(base64.split(',')[1]);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+    return new Blob([ab], { type: mime });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
     try {
-      await axios.post('http://localhost/api/usuarios/', formData);
-      setStep(4); // Move to success step
+      // 1. Registrar Rostro en AWS
+      const faceBlob = base64ToBlob(photoUrl);
+      const faceFormData = new FormData();
+      faceFormData.append('face_photo', faceBlob, 'rostro.jpg');
+
+      const faceRes = await axios.post('http://localhost:5002/api/biometrico/register/face', faceFormData);
+      const awsFaceId = faceRes.data.aws_face_id;
+
+      // 2. Registrar Huella (WebAuthn)
+      // a) Pedir opciones al backend
+      const optionsRes = await axios.post('http://localhost:5002/api/biometrico/register/fingerprint/options', { email: formData.email });
+      // b) El navegador pide la huella local (Windows Hello/TouchID)
+      const credential = await startRegistration(optionsRes.data.options);
+      // c) Enviar firma al backend
+      const webauthnRes = await axios.post('http://localhost:5002/api/biometrico/register/fingerprint/verify', {
+        email: formData.email,
+        credential
+      });
+
+      // 3. Guardar el Usuario final en ms_usuarios
+      const finalUserData = {
+        ...formData,
+        aws_face_id: awsFaceId,
+        webauthn_credential_id: webauthnRes.data.credential_id, // Lo que te devuelva el backend
+        webauthn_public_key: webauthnRes.data.public_key
+      };
+
+      await axios.post('http://localhost:80/api/usuarios/', finalUserData);
+      setStep(5); // Pantalla de Éxito
+
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al registrar el ciudadano');
+      setError(err.response?.data?.error || 'Error en el proceso biométrico');
     } finally {
       setIsLoading(false);
     }
@@ -147,15 +186,13 @@ export default function Register({ inDashboard = false }) {
     <div className="flex items-center justify-center mb-10">
       {[1, 2, 3].map((num, i) => (
         <div key={num} className="flex items-center">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all duration-300 ${
-            step >= num ? 'bg-[#1e3a8a] text-white shadow-lg' : 'bg-slate-100 text-slate-400'
-          }`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all duration-300 ${step >= num ? 'bg-[#1e3a8a] text-white shadow-lg' : 'bg-slate-100 text-slate-400'
+            }`}>
             {num}
           </div>
           {i < 2 && (
-            <div className={`w-12 h-1 transition-all duration-300 ${
-              step > num ? 'bg-[#1e3a8a]' : 'bg-slate-100'
-            }`} />
+            <div className={`w-12 h-1 transition-all duration-300 ${step > num ? 'bg-[#1e3a8a]' : 'bg-slate-100'
+              }`} />
           )}
         </div>
       ))}
@@ -165,9 +202,9 @@ export default function Register({ inDashboard = false }) {
   return (
     <div className={`animate-fade-in ${inDashboard ? 'p-14 max-w-4xl mx-auto' : 'min-h-screen flex items-center justify-center p-6 bg-cover bg-center relative'}`}
       style={!inDashboard ? { backgroundImage: 'linear-gradient(rgba(15, 23, 42, 0.6), rgba(15, 23, 42, 0.6)), url(/bg_voting_geometric.png)' } : {}}>
-      
+
       <div className={`w-full max-w-2xl ${inDashboard ? '' : 'flat-card !p-0 overflow-hidden shadow-2xl bg-white rounded-3xl'}`}>
-        
+
         {!inDashboard && (
           <div className="mb-10 text-center">
             <h1 className="text-4xl font-black text-white mb-2 tracking-tight">{t('register.title')}</h1>
@@ -176,7 +213,7 @@ export default function Register({ inDashboard = false }) {
         )}
 
         <div className={`transition-all duration-500 bg-white ${inDashboard ? 'flat-card !p-10' : 'p-12'}`}>
-          
+
           {step !== 4 && (
             <>
               <div className="mb-8 text-center">
@@ -214,7 +251,7 @@ export default function Register({ inDashboard = false }) {
                     <label className="text-xs font-bold text-[#1e3a8a] uppercase tracking-wider px-1">{t('register.dni')}</label>
                     <div className="input-wrapper">
                       <CreditCard size={18} className="input-icon" />
-                      <input name="dni" type="text" className="glass-input" maxLength={8} value={formData.dni} onChange={(e) => setFormData({...formData, dni: e.target.value.replace(/\D/g, '')})} placeholder={t('register.dni_placeholder')} />
+                      <input name="dni" type="text" className="glass-input" maxLength={8} value={formData.dni} onChange={(e) => setFormData({ ...formData, dni: e.target.value.replace(/\D/g, '') })} placeholder={t('register.dni_placeholder')} />
                     </div>
                   </div>
                   <div className="flex flex-col gap-2">
@@ -286,7 +323,7 @@ export default function Register({ inDashboard = false }) {
                     <p className="text-slate-500 font-medium text-sm">{t('register.abroad_residence')}</p>
                   </div>
                 )}
-                
+
                 <div className="flex flex-col gap-2 mt-6">
                   <label className="text-xs font-bold text-[#1e3a8a] uppercase tracking-wider px-1">{t('register.address')}</label>
                   <div className="input-wrapper">
@@ -368,7 +405,7 @@ export default function Register({ inDashboard = false }) {
                   </Link>
                 )
               )}
-              
+
               {step < 3 ? (
                 <button type="button" onClick={nextStep} className="glass-button flex-1 bg-[#1e3a8a]">
                   {t('register.next')} <ChevronRight size={18} />

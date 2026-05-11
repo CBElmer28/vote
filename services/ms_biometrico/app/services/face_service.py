@@ -20,7 +20,11 @@ logger = logging.getLogger(__name__)
 #  Mock
 # ─────────────────────────────────────────────────────────────────────────────
 class MockFaceService:
-    def verify(self, face_bytes: bytes, reference_url: str) -> dict:
+    def register_face(self, face_bytes: bytes) -> str:
+        logger.info("Modo MOCK — Simulando registro de rostro")
+        return "mock-face-id-12345"
+
+    def verify(self, face_bytes: bytes, reference_id: str) -> dict:
         logger.info("Utilizando MockFaceService (Modo desarrollo)")
         return {
             "verified":   True,
@@ -94,36 +98,78 @@ class AwsRekognitionService:
             aws_secret_access_key=current_app.config["AWS_SECRET_ACCESS_KEY"],
             region_name=current_app.config["AWS_REGION"]
         )
+        # Nombre de la colección que creaste en AWS
+        self.collection_id = 'votos_collection'
 
-    def verify(self, face_bytes: bytes, reference_url: str) -> dict:
-        logger.info(f"AWS: Comparando contra {reference_url}")
+    def register_face(self, face_bytes: bytes) -> str:
+        """
+        Envía la imagen a AWS para generar el vector y guardarlo en la colección.
+        Retorna el FaceId generado.
+        """
+        logger.info("AWS: Indexando nuevo rostro en la colección...")
         try:
-            # 1. Descargar referencia
-            response_ref = requests.get(reference_url, timeout=10)
-            response_ref.raise_for_status()
-            reference_bytes = response_ref.content
+            response = self.client.index_faces(
+                CollectionId=self.collection_id,
+                Image={'Bytes': face_bytes},
+                MaxFaces=1,
+                QualityFilter="AUTO"
+            )
+            
+            if response.get('FaceRecords'):
+                face_id = response['FaceRecords'][0]['Face']['FaceId']
+                logger.info(f"Rostro registrado exitosamente con ID: {face_id}")
+                return face_id
+                
+            logger.warning("AWS: No se detectó ningún rostro válido en la imagen.")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error registrando rostro en AWS: {str(e)}")
+            raise e
 
-            # 2. AWS Compare
-            threshold = current_app.config.get("FACE_CONFIDENCE_THRESHOLD", 0.6) * 100
-            response = self.client.compare_faces(
-                SourceImage={'Bytes': reference_bytes},
-                TargetImage={'Bytes': face_bytes},
-                SimilarityThreshold=threshold
+    def verify(self, face_bytes: bytes, reference_face_id: str) -> dict:
+        """
+        Busca el rostro de la cámara en la colección y verifica si el 
+        FaceId resultante coincide con el del usuario en la base de datos.
+        """
+        logger.info(f"AWS: Verificando rostro contra el FaceId guardado: {reference_face_id}")
+        try:
+            threshold = current_app.config.get("FACE_CONFIDENCE_THRESHOLD", 0.90) * 100
+            
+            # Buscamos la imagen en vivo dentro de la colección
+            response = self.client.search_faces_by_image(
+                CollectionId=self.collection_id,
+                Image={'Bytes': face_bytes},
+                MaxFaces=5, # Trae los 5 más parecidos
+                FaceMatchThreshold=threshold
             )
 
             matches = response.get('FaceMatches', [])
-            if matches:
-                similarity = matches[0]['Similarity'] / 100
-                return {
-                    "verified":   True,
-                    "confidence": round(similarity, 4),
-                    "message":    "Verificado con AWS Rekognition",
-                }
-            return {"verified": False, "confidence": 0.0, "message": "No coincide (AWS)"}
-        except Exception as e:
-            logger.error(f"Error AWS: {str(e)}")
-            return {"verified": False, "message": f"Error AWS: {str(e)}"}
+            
+            # Recorremos los matches para ver si el ID de la base de datos está ahí
+            for match in matches:
+                matched_id = match['Face']['FaceId']
+                
+                if matched_id == reference_face_id:
+                    similarity = match['Similarity'] / 100
+                    return {
+                        "verified":   True,
+                        "confidence": round(similarity, 4),
+                        "message":    "Verificado con AWS Rekognition (Colección)",
+                    }
+                    
+            # Si termina el bucle y no hubo match con el ID esperado
+            return {
+                "verified": False, 
+                "confidence": 0.0, 
+                "message": "El rostro no corresponde al usuario registrado (AWS)"
+            }
 
+        except self.client.exceptions.InvalidParameterException:
+            return {"verified": False, "message": "AWS no detectó un rostro claro en la captura de la cámara."}
+        except Exception as e:
+            logger.error(f"Error en verificación AWS: {str(e)}")
+            return {"verified": False, "message": f"Error interno AWS: {str(e)}"}
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Factory

@@ -29,6 +29,20 @@ class UserService:
             return None, "User not found"
         return user.to_dict(), None
 
+    def get_by_dni(self, dni: str):
+        """Busca un usuario por su DNI"""
+        user = self.repo.get_by_dni(dni)
+        if not user:
+            return None, "User not found"
+        return user.to_dict(), None
+
+    def get_by_email(self, email: str):
+        """Busca un usuario por su Email"""
+        user = self.repo.get_by_email(email)
+        if not user:
+            return None, "User not found"
+        return user.to_dict(), None
+
     def create_user(self, data: dict):
         # Required fields
         for field in ["first_name", "paternal_last_name", "maternal_last_name", "dob", "dni"]:

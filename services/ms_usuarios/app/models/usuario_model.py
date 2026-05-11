@@ -1,6 +1,5 @@
 from app import db
 
-
 class Role(db.Model):
     """ORM model for the 'roles' table."""
     __tablename__ = "roles"
@@ -29,9 +28,13 @@ class User(db.Model):
     district_id         = db.Column(db.String(6),   nullable=True)
     address             = db.Column(db.String(255), nullable=True)
     photo_url           = db.Column(db.String(255), nullable=True)
-    fingerprint_hash    = db.Column(db.String(255), nullable=True)
+
+    aws_face_id            = db.Column(db.String(255), unique=True, nullable=True)
+    webauthn_credential_id = db.Column(db.String(255), unique=True, nullable=True)
+    webauthn_public_key    = db.Column(db.Text, nullable=True)
+    
     is_active           = db.Column(db.Boolean,     default=True, nullable=False)
-    role_id             = db.Column(db.Integer,     db.ForeignKey('roles.id'), nullable=False, default=2) # Default to VOTER
+    role_id             = db.Column(db.Integer,     db.ForeignKey('roles.id'), nullable=False, default=2)
     created_at          = db.Column(db.DateTime,    server_default=db.func.now())
     updated_at          = db.Column(db.DateTime,    server_default=db.func.now(), onupdate=db.func.now())
 
@@ -39,22 +42,23 @@ class User(db.Model):
 
     def to_dict(self):
         return {
-            "id":                self.id,
-            "first_name":        self.first_name,
-            "paternal_last_name":self.paternal_last_name,
-            "maternal_last_name":self.maternal_last_name,
-            "dob":               str(self.dob) if self.dob else None,
-            "dni":               self.dni,
-            "email":             self.email,
-            "phone":             self.phone,
-            "country_residence": self.country_residence,
-            "department_id":     self.department_id,
-            "province_id":       self.province_id,
-            "district_id":       self.district_id,
-            "address":           self.address,
-            "photo_url":         self.photo_url,
-            "fingerprint_hash":  self.fingerprint_hash,
-            "is_active":         self.is_active,
-            "role":              self.role.name if self.role else "VOTER",
-            "created_at":        str(self.created_at),
+            "id":                    self.id,
+            "first_name":            self.first_name,
+            "paternal_last_name":    self.paternal_last_name,
+            "maternal_last_name":    self.maternal_last_name,
+            "dob":                   str(self.dob) if self.dob else None,
+            "dni":                   self.dni,
+            "email":                 self.email,
+            "phone":                 self.phone,
+            "country_residence":     self.country_residence,
+            "department_id":         self.department_id,
+            "province_id":           self.province_id,
+            "district_id":           self.district_id,
+            "address":               self.address,
+            "photo_url":             self.photo_url,
+            "aws_face_id":           self.aws_face_id,
+            "webauthn_credential_id":self.webauthn_credential_id,
+            "is_active":             self.is_active,
+            "role":                  self.role.name if self.role else "VOTER",
+            "created_at":            str(self.created_at),
         }

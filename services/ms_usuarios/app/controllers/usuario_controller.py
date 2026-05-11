@@ -25,14 +25,33 @@ def get_user(user_id):
         return jsonify({"error": error}), 404
     return jsonify({"data": user}), 200
 
+@usuario_bp.route("/by-dni/<string:dni>", methods=["GET"])
+def get_user_by_dni(dni):
+    """GET /api/usuarios/by-dni/<dni>"""
+    user, error = service.get_by_dni(dni)
+    if error:
+        return jsonify({"error": error}), 404
+    return jsonify({"data": user}), 200
+
+@usuario_bp.route("/by-email/<string:email>", methods=["GET"])
+def get_user_by_email(email):
+    """GET /api/usuarios/by-email/<email>"""
+    user, error = service.get_by_email(email)
+    if error:
+        return jsonify({"error": error}), 404
+    return jsonify({"data": user}), 200
+
 
 @usuario_bp.route("/", methods=["POST"])
 def create_user():
     """
     POST /api/usuarios/
     JSON body:
-        first_name, last_name, dni (8 digits), email,
-        photo_url (optional), fingerprint_hash (optional)
+        first_name, paternal_last_name, maternal_last_name, dob, dni (8 digits), email,
+        photo_url (optional), 
+        aws_face_id (optional),
+        webauthn_credential_id (optional),
+        webauthn_public_key (optional)
     """
     data = request.get_json()
     if not data:
