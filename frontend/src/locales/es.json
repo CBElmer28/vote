@@ -13,7 +13,18 @@
     "encryption": "Encriptación de grado militar activa",
     "citizen_portal": "Portal de Votantes",
     "admin_portal": "Portal Administrativo",
-    "language": "ESPAÑOL"
+    "language": "ESPAÑOL",
+    "validate_identity": "Validar Identidad",
+    "barcode_validation": "Validación de DNI",
+    "barcode_instruction": "Escanee el código de barras de su DNI físico",
+    "barcode_scan": "Escanear Código",
+    "barcode_rescan": "Re-escanear Código",
+    "barcode_detected": "Código detectado",
+    "confirm_enter": "Confirmar y Entrar",
+    "barcode_mismatch": "El código de barras ({{scanned}}) no coincide con el DNI ingresado ({{entered}}).",
+    "barcode_modal_title": "Escanear Código de Barras",
+    "barcode_modal_desc": "Coloque el código de barras de su DNI frente a la cámara.",
+    "cancel": "Cancelar"
   },
   "results": {
     "title": "Resultados Electorales",
