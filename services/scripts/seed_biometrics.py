@@ -3,16 +3,19 @@ import boto3
 import mysql.connector
 from dotenv import load_dotenv
 
-# 1. Cargar el .env desde la raíz del proyecto (un nivel arriba)
-env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-load_dotenv(dotenv_path=env_path)
+# 1. Cargar el .env (opcional, útil para local)
+env_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
+if os.path.exists(env_path):
+    load_dotenv(dotenv_path=env_path)
+else:
+    load_dotenv() # Intenta cargar desde el CWD o variables de entorno del sistema
 
-# 2. Configuración de BD (Apuntamos a localhost porque lo corremos fuera de Docker)
+# 2. Configuración de BD
 DB_CONFIG = {
-    'host': '127.0.0.1',
-    'port': int(os.getenv('DB_PORT', 3307)), # El puerto va aquí, como un número entero
-    'user': os.getenv('MYSQL_USER', 'root'),
-    'password': os.getenv('MYSQL_PASSWORD', 'rootpassword'),
+    'host': os.getenv('DB_HOST', '127.0.0.1'),
+    'port': int(os.getenv('DB_PORT', 3307)) if os.getenv('DB_HOST') != 'db' else 3306,
+    'user': os.getenv('MYSQL_USER', 'voteuser'),
+    'password': os.getenv('MYSQL_PASSWORD', 'votepassword'),
     'database': os.getenv('MYSQL_DATABASE', 'votesystem')
 }
 # 3. Configuración de AWS

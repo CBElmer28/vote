@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AccessibilityProvider } from './context/AccessibilityContext';
 import AccessibilityGlobalEffects from './components/AccessibilityGlobalEffects';
+import GlobalControls from './components/GlobalControls';
 
 // Pages
 import Login from './pages/Login';
@@ -36,6 +37,7 @@ function App() {
       <AccessibilityGlobalEffects />
       <AuthProvider>
         <Router>
+          <GlobalControls />
           <Routes>
             <Route path="/" element={<Login />} />
             <Route 

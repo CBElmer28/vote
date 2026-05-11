@@ -155,7 +155,7 @@ export default function Register({ inDashboard = false }) {
       setStep(5); // Pantalla de Éxito
 
     } catch (err) {
-      setError(err.response?.data?.error || 'Error en el proceso biométrico');
+      setError(err.response?.data?.error || t('login.err_biometric'));
     } finally {
       setIsLoading(false);
     }
@@ -367,7 +367,7 @@ export default function Register({ inDashboard = false }) {
                       <p className="font-black text-lg text-[#1e3a8a] leading-tight">
                         {formData.first_name} {formData.paternal_last_name} {formData.maternal_last_name}
                       </p>
-                      <p className="text-sm font-medium text-slate-500">DNI: {formData.dni}</p>
+                      <p className="text-sm font-medium text-slate-500">{t('register.dni')}: {formData.dni}</p>
                     </div>
                   </div>
                 </div>

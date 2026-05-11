@@ -1,6 +1,8 @@
+import { useTranslation } from 'react-i18next';
 import { Vote, Shield } from 'lucide-react';
 
 export const CandidateCard = ({ candidate, isSelected, onSelect }) => {
+  const { t } = useTranslation();
   return (
     <div 
       onClick={() => onSelect(candidate)}
@@ -23,10 +25,10 @@ export const CandidateCard = ({ candidate, isSelected, onSelect }) => {
         </div>
         <div className="flex flex-col min-w-0">
           <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">
-            Organización Política
+            {t('vote.political_org')}
           </span>
           <h4 className="text-lg font-black text-text-main truncate mt-1">
-            {candidate.party || 'Independiente'}
+            {candidate.party || t('vote.independent')}
           </h4>
         </div>
       </div>

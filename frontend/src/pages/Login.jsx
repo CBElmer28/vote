@@ -167,7 +167,7 @@ export default function Login({ isAdminLogin = false }) {
             <h1 className="text-4xl font-black text-white tracking-tight">VoteSystem</h1>
           </div>
           <p className="text-white/80 font-bold uppercase text-xs tracking-widest">
-            {isAdminLogin ? 'Portal Administrativo' : 'Portal del Ciudadano'}
+            {isAdminLogin ? t('login.admin_portal') : t('login.citizen_portal')}
           </p>
         </div>
 
@@ -176,13 +176,13 @@ export default function Login({ isAdminLogin = false }) {
           <div className="flex items-center justify-center gap-3 mb-8">
             {!isAdminLogin && (
               <>
-                <StepIcon active={step === 2} done={step > 2} icon={<Barcode size={18} />} label="Físico" />
+                <StepIcon active={step === 2} done={step > 2} icon={<Barcode size={18} />} label={t('vote.step_barcode')} />
                 <div className={`h-0.5 w-6 ${step > 2 ? 'bg-green-500' : 'bg-white/20'}`} />
               </>
             )}
-            <StepIcon active={step === 3} done={step > 3} icon={<Fingerprint size={18} />} label="Huella" />
+            <StepIcon active={step === 3} done={step > 3} icon={<Fingerprint size={18} />} label={t('vote.step_finger')} />
             <div className={`h-0.5 w-6 ${step > 3 ? 'bg-green-500' : 'bg-white/20'}`} />
-            <StepIcon active={step === 4} done={false} icon={<Camera size={18} />} label="Rostro" />
+            <StepIcon active={step === 4} done={false} icon={<Camera size={18} />} label={t('vote.step_face')} />
           </div>
         )}
 
@@ -199,8 +199,10 @@ export default function Login({ isAdminLogin = false }) {
                 <h2 className="text-2xl font-black text-slate-800">{t('login.welcome')}</h2>
                 <p className="text-slate-500 font-medium">{t('login.instruction')}</p>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">{isAdminLogin ? 'Email' : 'DNI'}</label>
+              <div className="space-y-3">
+                <label className="block text-xs font-bold text-blue-900 uppercase tracking-wider mb-3">
+                  {isAdminLogin ? t('login.email_label') : t('login.dni_label')}
+                </label>
                 <div className="relative">
                   {isAdminLogin ? <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} /> : <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />}
                   <input
@@ -208,41 +210,50 @@ export default function Login({ isAdminLogin = false }) {
                     value={identifier}
                     onChange={(e) => setIdentifier(isAdminLogin ? e.target.value : e.target.value.replace(/\D/g, ''))}
                     maxLength={isAdminLogin ? 100 : 8}
+                    placeholder={isAdminLogin ? t('login.email_placeholder') : t('login.dni_placeholder')}
                     required
                   />
                 </div>
               </div>
+
               <button type="submit" className="w-full py-4 bg-blue-900 text-white rounded-2xl font-black flex items-center justify-center gap-2">
-                Continuar <ChevronRight size={20} />
+                {t('login.continue')} <ChevronRight size={20} />
               </button>
+
+              {!isAdminLogin && (
+                <div className="flex items-start gap-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-500 text-xs font-medium leading-relaxed">
+                  <div className="mt-0.5"><ShieldCheck size={16} className="text-blue-600/50" /></div>
+                  <p>{t('login.prepare_instruction')}</p>
+                </div>
+              )}
             </form>
           )}
 
           {step === 2 && !isAdminLogin && (
             <div className="flex flex-col items-center gap-6 text-center animate-fade-in">
               <div>
-                <h2 className="text-2xl font-black">Validación de DNI</h2>
-                <p className="text-slate-500">Escanee el código de barras de su documento físico</p>
+                <h2 className="text-2xl font-black">{t('login.barcode_validation')}</h2>
+                <p className="text-slate-500">{t('login.barcode_instruction')}</p>
               </div>
               <div className={`w-full py-10 border-2 border-dashed rounded-3xl flex flex-col items-center transition-colors duration-300 ${scannedDni && scannedDni === identifier ? 'bg-green-50 border-green-500' : 'bg-slate-50 border-slate-200'
                 }`}>
                 <Barcode size={60} className={`mb-4 transition-transform duration-500 ${scannedDni && scannedDni === identifier ? 'text-green-500 scale-110' : 'text-blue-900/30'}`} />
 
                 <button onClick={() => setIsBarcodeScannerOpen(true)} className="px-8 py-3 bg-blue-900 text-white rounded-xl font-bold flex items-center gap-2">
-                  <Camera size={18} /> {scannedDni ? 'Volver a escanear' : 'Activar Cámara Lector'}
+                  <Camera size={18} /> {scannedDni ? t('login.barcode_rescan') : t('login.barcode_scan')}
                 </button>
 
                 {scannedDni && (
                   <div className={`mt-6 font-black text-sm flex items-center gap-2 ${scannedDni === identifier ? 'text-green-600 animate-bounce' : 'text-red-600'}`}>
                     {scannedDni === identifier ? <Check size={18} /> : <AlertCircle size={18} />}
-                    {scannedDni === identifier ? `DNI Verificado: ${scannedDni}` : 'DNI No Coincide'}
+                    {scannedDni === identifier ? `${t('login.dni_verified')}: ${scannedDni}` : t('login.dni_mismatch')}
                   </div>
                 )}
               </div>
               <div className="flex gap-4 w-full">
-                <button className="flex-1 py-4 border border-slate-200 rounded-2xl font-bold text-slate-500" onClick={() => setStep(1)}>Atrás</button>
+                <button className="flex-1 py-4 border border-slate-200 rounded-2xl font-bold text-slate-500" onClick={() => setStep(1)}>{t('vote.back')}</button>
                 <button className="flex-2 py-4 bg-blue-900 text-white rounded-2xl font-bold disabled:opacity-50" disabled={!scannedDni || scannedDni !== identifier} onClick={() => setStep(3)}>
-                  Validar Huella <ChevronRight size={18} className="inline" />
+                  {t('login.validate_fingerprint')} <ChevronRight size={18} className="inline" />
                 </button>
               </div>
             </div>
@@ -251,17 +262,17 @@ export default function Login({ isAdminLogin = false }) {
           {step === 3 && (
             <div className="flex flex-col items-center gap-6 text-center animate-fade-in">
               <div>
-                <h2 className="text-2xl font-black">Validación Dactilar</h2>
-                <p className="text-slate-500">Use el sensor biométrico del dispositivo</p>
+                <h2 className="text-2xl font-black">{t('vote.finger_title')}</h2>
+                <p className="text-slate-500">{t('vote.finger_desc')}</p>
               </div>
               <div className="w-full py-12 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50 flex flex-col items-center">
                 <Fingerprint size={60} className="text-blue-900/30 mb-4" />
                 <button onClick={handleFingerprintAuth} className="px-8 py-3 bg-blue-900 text-white rounded-xl font-bold flex items-center gap-2" disabled={isLoading}>
-                  {isLoading ? <Loader2 className="animate-spin" /> : 'Escanear Huella (Demo)'}
+                  {isLoading ? <Loader2 className="animate-spin" /> : t('vote.scan_finger')}
                 </button>
               </div>
               <div className="flex w-full">
-                <button className="text-sm font-bold text-slate-400 mx-auto" onClick={() => setStep(isAdminLogin ? 1 : 2)}>Volver</button>
+                <button className="text-sm font-bold text-slate-400 mx-auto" onClick={() => setStep(isAdminLogin ? 1 : 2)}>{t('vote.back')}</button>
               </div>
             </div>
           )}
@@ -269,8 +280,8 @@ export default function Login({ isAdminLogin = false }) {
           {step === 4 && (
             <div className="flex flex-col items-center gap-6 animate-fade-in">
               <div className="text-center">
-                <h2 className="text-2xl font-black">Validación Facial</h2>
-                <p className="text-slate-500">Mire a la cámara frontal</p>
+                <h2 className="text-2xl font-black">{t('vote.face_title')}</h2>
+                <p className="text-slate-500">{t('vote.face_desc')}</p>
               </div>
               <div className="w-full aspect-video rounded-3xl overflow-hidden bg-slate-900 relative border-4 border-slate-100 shadow-inner">
                 {!photoUrl ? (
@@ -283,18 +294,18 @@ export default function Login({ isAdminLogin = false }) {
                 {!photoUrl ? (
                   <>
                     <button onClick={capture} className="w-full py-4 bg-blue-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2">
-                      <Camera size={20} /> Capturar Rostro
+                      <Camera size={20} /> {t('vote.capture_photo')}
                     </button>
                     <input type="file" id="f-up" accept="image/*" onChange={handleFaceUpload} className="hidden" />
                     <label htmlFor="f-up" className="w-full py-3 border border-slate-200 text-slate-500 rounded-2xl font-bold flex items-center justify-center gap-2 cursor-pointer">
-                      <Upload size={18} /> Subir Imagen de Prueba
+                      <Upload size={18} /> {t('admin.select_file')}
                     </label>
                   </>
                 ) : (
                   <div className="flex gap-4">
-                    <button onClick={() => setPhotoUrl(null)} className="flex-1 py-4 border border-slate-200 rounded-2xl font-bold text-slate-500">Reintentar</button>
+                    <button onClick={() => setPhotoUrl(null)} className="flex-1 py-4 border border-slate-200 rounded-2xl font-bold text-slate-500">{t('vote.retry')}</button>
                     <button onClick={handleFinalLogin} className="flex-2 py-4 bg-green-600 text-white rounded-2xl font-bold" disabled={isLoading}>
-                      {isLoading ? <Loader2 className="animate-spin" /> : 'Confirmar Identidad'}
+                      {isLoading ? <Loader2 className="animate-spin" /> : t('vote.confirm_continue')}
                     </button>
                   </div>
                 )}

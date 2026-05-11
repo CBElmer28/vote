@@ -37,7 +37,7 @@ export default function AdminDashboard() {
             onClick={() => setShowAccessibility(true)} 
             className="flex-1 flex items-center justify-center gap-2 p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-all text-white font-bold text-xs"
           >
-            <Accessibility size={16} /> ACCESIBILIDAD
+            <Accessibility size={16} /> {t('admin.accessibility')}
           </button>
           <button 
             onClick={toggleTheme} 

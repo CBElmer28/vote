@@ -72,8 +72,6 @@ services:
       dockerfile: Dockerfile
     container_name: votesystem_ms_usuarios
     restart: unless-stopped
-    ports:
-      - "5001:5001"
     environment:
       FLASK_ENV: development
       FLASK_DEBUG: "1"
@@ -100,8 +98,6 @@ services:
       dockerfile: Dockerfile
     container_name: votesystem_ms_biometrico
     restart: unless-stopped
-    ports:
-      - "5002:5002"
     environment:
       FLASK_ENV: development
       FLASK_DEBUG: "1"
@@ -129,8 +125,6 @@ services:
       dockerfile: Dockerfile
     container_name: votesystem_ms_votacion
     restart: unless-stopped
-    ports:
-      - "5003:5003"
     environment:
       FLASK_ENV: development
       FLASK_DEBUG: "1"
@@ -159,8 +153,6 @@ services:
       dockerfile: Dockerfile
     container_name: votesystem_ms_analisis
     restart: unless-stopped
-    ports:
-      - "5004:5004"
     environment:
       FLASK_ENV: development
       FLASK_DEBUG: "1"
@@ -187,8 +179,6 @@ services:
       dockerfile: Dockerfile
     container_name: votesystem_ms_candidatos
     restart: unless-stopped
-    ports:
-      - "5005:5005"
     environment:
       FLASK_ENV: development
       FLASK_DEBUG: "1"

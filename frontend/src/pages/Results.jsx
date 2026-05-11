@@ -2,10 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
-import { LogOut, Users, Activity, ShieldCheck, Loader2, MapPin, ChevronDown, Check, Globe, Accessibility } from 'lucide-react';
+import { LogOut, Users, Activity, ShieldCheck, Loader2, MapPin, ChevronDown, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useAccessibility } from '../context/AccessibilityContext';
-import AccessibilityMenu from '../components/AccessibilityMenu';
 
 import countriesData from '../data/countries.json';
 import departmentsData from '../data/departments.json';
@@ -39,11 +37,9 @@ export default function Results() {
   const [filterDist, setFilterDist] = useState('');
   const [showModeDropdown, setShowModeDropdown] = useState(false);
 
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { logout } = useAuth();
-  const { toggleTheme } = useAccessibility();
-  const [showAccessibility, setShowAccessibility] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -128,19 +124,6 @@ export default function Results() {
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="relative group cursor-pointer z-50">
-            <div className="flex items-center gap-2 px-4 py-3 bg-surface border border-surface-border rounded-2xl shadow-sm hover:shadow-md hover:bg-surface-hover transition-all text-text-main font-bold text-sm uppercase">
-              <Globe size={18} />
-              <span>{t('login.language')}</span>
-            </div>
-            {/* Dropdown menu */}
-            <div className="absolute top-full right-0 mt-2 w-32 bg-white rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden border border-slate-100">
-              <button onClick={() => i18n.changeLanguage('es')} className="w-full text-left px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-primary-blue">ESPAÑOL</button>
-              <button onClick={() => i18n.changeLanguage('en')} className="w-full text-left px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-primary-blue">ENGLISH</button>
-              <button onClick={() => i18n.changeLanguage('qu')} className="w-full text-left px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-primary-blue">QUECHUA</button>
-            </div>
-          </div>
-
           <button 
             onClick={handleLogout}
             className="flex items-center gap-2 px-6 py-3 bg-surface border border-surface-border text-text-main font-bold rounded-2xl shadow-sm hover:shadow-md hover:bg-surface-hover transition-all active:scale-95"
@@ -148,18 +131,9 @@ export default function Results() {
             <LogOut className="w-5 h-5" />
             {t('results.logout')}
           </button>
-
-          <button 
-            onClick={() => setShowAccessibility(true)}
-            className="p-3 bg-surface border border-surface-border text-text-main rounded-2xl shadow-sm hover:bg-surface-hover transition-all"
-            title="Accesibilidad"
-          >
-            <Accessibility size={22} />
-          </button>
         </div>
       </div>
 
-      <AccessibilityMenu isOpen={showAccessibility} onClose={() => setShowAccessibility(false)} />
 
       {/* Overview Section */}
       <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-4 mb-6">

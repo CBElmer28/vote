@@ -3,9 +3,11 @@ import {
   Moon, Sun, Palette, ZoomIn, Info,
   CheckCircle2, MousePointer2, ZapOff
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAccessibility } from '../context/AccessibilityContext';
 
 export default function AccessibilityMenu({ isOpen, onClose }) {
+  const { t } = useTranslation();
   const { settings, updateSetting, toggleTheme } = useAccessibility();
 
   if (!isOpen) return null;
@@ -27,8 +29,8 @@ export default function AccessibilityMenu({ isOpen, onClose }) {
               <Settings size={20} />
             </div>
             <div>
-              <h2 className="text-xl font-black">Accesibilidad</h2>
-              <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest">Ajustes del Sistema</p>
+              <h2 className="text-xl font-black">{t('accessibility.title')}</h2>
+              <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest">{t('accessibility.subtitle')}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl transition-all">
@@ -42,33 +44,33 @@ export default function AccessibilityMenu({ isOpen, onClose }) {
           {/* Visual Profile */}
           <section className="space-y-4">
             <h3 className="text-xs font-black text-text-muted uppercase tracking-widest flex items-center gap-2">
-              <Palette size={14} /> Perfiles de Daltonismo
+              <Palette size={14} /> {t('accessibility.profiles_title')}
             </h3>
             <div className="grid grid-cols-1 gap-2">
               <OptionButton 
                 active={settings.colorProfile === 'default'} 
                 onClick={() => updateSetting('colorProfile', 'default')}
-                label="Normal (Por defecto)"
+                label={t('accessibility.profile_default')}
               />
               <OptionButton 
                 active={settings.colorProfile === 'protanopia'} 
                 onClick={() => updateSetting('colorProfile', 'protanopia')}
-                label="Protanopia (Rojo-Ciego)"
+                label={t('accessibility.profile_protanopia')}
               />
               <OptionButton 
                 active={settings.colorProfile === 'deuteranopia'} 
                 onClick={() => updateSetting('colorProfile', 'deuteranopia')}
-                label="Deuteranopia (Verde-Ciego)"
+                label={t('accessibility.profile_deuteranopia')}
               />
               <OptionButton 
                 active={settings.colorProfile === 'tritanopia'} 
                 onClick={() => updateSetting('colorProfile', 'tritanopia')}
-                label="Tritanopia (Azul-Ciego)"
+                label={t('accessibility.profile_tritanopia')}
               />
               <OptionButton 
                 active={settings.colorProfile === 'achromatopsia'} 
                 onClick={() => updateSetting('colorProfile', 'achromatopsia')}
-                label="Acromatopsia (Blanco y Negro)"
+                label={t('accessibility.profile_achromatopsia')}
               />
             </div>
           </section>
@@ -76,20 +78,20 @@ export default function AccessibilityMenu({ isOpen, onClose }) {
           {/* Typography */}
           <section className="space-y-4">
             <h3 className="text-xs font-black text-text-muted uppercase tracking-widest flex items-center gap-2">
-              <Type size={14} /> Tipografía y Lectura
+              <Type size={14} /> {t('accessibility.typography_title')}
             </h3>
             <div className="grid grid-cols-2 gap-2">
               <OptionCard 
                 active={settings.font === 'dyslexic'} 
                 onClick={() => updateSetting('font', settings.font === 'dyslexic' ? 'normal' : 'dyslexic')}
                 icon={<Info size={20} />}
-                label="Perfiles Dislexia"
+                label={t('accessibility.dyslexia_font')}
               />
               <OptionCard 
                 active={settings.adhdMode} 
                 onClick={() => updateSetting('adhdMode', !settings.adhdMode)}
                 icon={<MousePointer2 size={20} />}
-                label="Foco TDHA"
+                label={t('accessibility.adhd_focus')}
               />
             </div>
           </section>
@@ -97,11 +99,11 @@ export default function AccessibilityMenu({ isOpen, onClose }) {
           {/* Vision & Contrast */}
           <section className="space-y-4">
             <h3 className="text-xs font-black text-text-muted uppercase tracking-widest flex items-center gap-2">
-              <Eye size={14} /> Visión Baja y Contraste
+              <Eye size={14} /> {t('accessibility.vision_contrast_title')}
             </h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between p-4 bg-bg-main rounded-2xl border border-surface-border">
-                <span className="text-sm font-bold text-text-main">Escala de Texto</span>
+                <span className="text-sm font-bold text-text-main">{t('accessibility.text_scale')}</span>
                 <div className="flex gap-2">
                   {[1, 1.2, 1.5].map(scale => (
                     <button 
@@ -117,7 +119,7 @@ export default function AccessibilityMenu({ isOpen, onClose }) {
               <OptionButton 
                 active={settings.highContrast} 
                 onClick={() => updateSetting('highContrast', !settings.highContrast)}
-                label="Alto Contraste (Invertido)"
+                label={t('accessibility.high_contrast')}
               />
             </div>
           </section>
@@ -125,20 +127,20 @@ export default function AccessibilityMenu({ isOpen, onClose }) {
           {/* Others */}
           <section className="space-y-4">
             <h3 className="text-xs font-black text-text-muted uppercase tracking-widest flex items-center gap-2">
-              <Activity size={14} /> Sensibilidad y Otros
+              <Activity size={14} /> {t('accessibility.sensitivity_title')}
             </h3>
             <div className="grid grid-cols-2 gap-2">
               <OptionCard 
                 active={settings.theme === 'dark'} 
                 onClick={toggleTheme}
                 icon={settings.theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-                label={settings.theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
+                label={settings.theme === 'dark' ? t('accessibility.mode_light') : t('accessibility.mode_dark')}
               />
               <OptionCard 
                 active={settings.reducedMotion} 
                 onClick={() => updateSetting('reducedMotion', !settings.reducedMotion)}
                 icon={<ZapOff size={20} />}
-                label="Reducir Mov."
+                label={t('accessibility.reduced_motion')}
               />
             </div>
           </section>
@@ -148,7 +150,7 @@ export default function AccessibilityMenu({ isOpen, onClose }) {
         {/* Footer */}
         <div className="p-8 bg-bg-main border-t border-surface-border shrink-0">
           <p className="text-[10px] text-text-muted font-bold text-center leading-relaxed">
-            Estos ajustes se sincronizan automáticamente con su perfil y se guardan localmente para su próxima sesión.
+            {t('accessibility.footer_note')}
           </p>
         </div>
       </aside>

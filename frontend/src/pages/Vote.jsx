@@ -6,7 +6,6 @@ import { useAuth } from '../context/AuthContext';
 import { CandidateCard } from '../components/CandidateCard';
 import { CheckCircle, AlertCircle, User, Loader2, Accessibility, Moon, Sun } from 'lucide-react';
 import { useAccessibility } from '../context/AccessibilityContext';
-import AccessibilityMenu from '../components/AccessibilityMenu';
 
 export default function Vote() {
   const { user, hasVoted } = useAuth();
@@ -20,7 +19,6 @@ export default function Vote() {
   const [error, setError] = useState('');
 
   const { settings, toggleTheme } = useAccessibility();
-  const [showAccessibility, setShowAccessibility] = useState(false);
 
   // Redirigir si el usuario ya votó
   useEffect(() => {
@@ -59,7 +57,7 @@ export default function Vote() {
         navigate('/results', { state: { success: true } });
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al emitir el voto. Intente nuevamente.');
+      setError(err.response?.data?.error || t('login.err_vote'));
       setIsSubmitting(false);
     }
   };
@@ -123,24 +121,6 @@ export default function Vote() {
 
       </div>
 
-      {/* Floating Controls */}
-      <div className="fixed top-8 right-8 flex flex-col gap-3 z-50">
-        <button
-          onClick={() => setShowAccessibility(true)}
-          className="w-12 h-12 bg-surface border border-surface-border text-text-main rounded-2xl shadow-xl hover:bg-bg-main transition-all flex items-center justify-center"
-          title="Accesibilidad"
-        >
-          <Accessibility size={24} />
-        </button>
-        <button
-          onClick={toggleTheme}
-          className="w-12 h-12 bg-surface border border-surface-border text-text-main rounded-2xl shadow-xl hover:bg-bg-main transition-all flex items-center justify-center"
-        >
-          {settings.theme === 'light' ? <Moon size={24} /> : <Sun size={24} />}
-        </button>
-      </div>
-
-      <AccessibilityMenu isOpen={showAccessibility} onClose={() => setShowAccessibility(false)} />
     </div>
   );
 }
