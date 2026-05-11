@@ -5,14 +5,16 @@ import { useAuth } from '../context/AuthContext';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { startAuthentication } from '@simplewebauthn/browser';
 import AccessibilityMenu from '../components/AccessibilityMenu';
+import BarcodeScanner from '../components/BarcodeScanner'; // <-- Importar el Lector
 import Webcam from 'react-webcam';
 import axios from 'axios';
 import {
   User, ShieldCheck, Globe, Moon, Sun, Vote, Accessibility,
-  Mail, Fingerprint, Camera, ChevronRight, AlertCircle, Loader2, Upload
+  Mail, Fingerprint, Camera, ChevronRight, AlertCircle, Loader2, Upload,
+  Barcode, Check // <-- Iconos añadidos
 } from 'lucide-react';
 
-// Utilidad para convertir el base64 a Blob para el envío al Backend
+// Utilidad para convertir el base64 a Blob
 const base64ToBlob = (base64, mime = 'image/jpeg') => {
   const byteString = atob(base64.split(',')[1]);
   const ab = new ArrayBuffer(byteString.length);
@@ -30,6 +32,10 @@ export default function Login({ isAdminLogin = false }) {
   const [step, setStep] = useState(1);
   const [photoUrl, setPhotoUrl] = useState(null);
 
+  // Estados para Código de Barras
+  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
+  const [scannedDni, setScannedDni] = useState('');
+
   const { settings, toggleTheme } = useAccessibility();
   const [showAccessibility, setShowAccessibility] = useState(false);
   const webcamRef = useRef(null);
@@ -38,7 +44,70 @@ export default function Login({ isAdminLogin = false }) {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // --- CAPTURA DE ROSTRO ---
+  // --- PASO 1: CREDENCIALES ---
+  const handleStep1 = (e) => {
+    e.preventDefault();
+    setError('');
+    if (!isAdminLogin) {
+      if (identifier.length !== 8) {
+        setError('El DNI debe tener 8 dígitos.');
+        return;
+      }
+      setStep(2); // Ciudadano va a escanear código de barras
+    } else {
+      if (!identifier.includes('@')) {
+        setError('Ingrese un correo válido.');
+        return;
+      }
+      setStep(3); // Administrador salta directo a huella
+    }
+  };
+
+  // --- PASO 2: CÓDIGO DE BARRAS (Solo Ciudadanos) ---
+  const handleBarcodeScan = (decodedText) => {
+    // Extraer 8 dígitos de la lectura (filtro de seguridad)
+    const dniMatch = decodedText.match(/\d{8}/);
+    const extractedDni = dniMatch ? dniMatch[0] : decodedText;
+
+    setScannedDni(extractedDni);
+    setIsBarcodeScannerOpen(false);
+
+    if (extractedDni === identifier) {
+      setError('');
+    } else {
+      setError(`DNI no coincide. Ingresó: ${identifier}, Escaneó: ${extractedDni}`);
+    }
+  };
+
+  // --- PASO 3: HUELLA (MODO DEMO) ---
+  const handleFingerprintAuth = async () => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // Temporizador para simular lectura en Modo Demo
+      setTimeout(() => {
+        setIsLoading(false);
+        setStep(4); // Avanzar a Rostro
+      }, 1500);
+
+      /* --- CÓDIGO REAL (Descomentar en producción) ---
+      const field = isAdminLogin ? 'email' : 'dni';
+      const optionsRes = await axios.post('http://localhost:80/api/biometrico/verify/fingerprint/options', { [field]: identifier });
+      const assertion = await startAuthentication(optionsRes.data.options);
+      const verifyRes = await axios.post('http://localhost:80/api/biometrico/verify/fingerprint/verify', {
+        [field]: identifier, credential_response: assertion
+      });
+      if (verifyRes.data.verified) setStep(4); 
+      -------------------------------------------------- */
+
+    } catch (err) {
+      setError('Error en huella dactilar: ' + (err.response?.data?.error || err.message));
+      setIsLoading(false);
+    }
+  };
+
+  // --- PASO 4: ROSTRO (AWS) + LOGIN FINAL ---
   const capture = useCallback(() => {
     const imageSrc = webcamRef.current.getScreenshot();
     if (imageSrc) setPhotoUrl(imageSrc);
@@ -53,66 +122,14 @@ export default function Login({ isAdminLogin = false }) {
     }
   };
 
-  // --- PASO 1: VALIDAR CREDENCIALES ---
-  const handleStep1 = (e) => {
-    e.preventDefault();
-    setError('');
-    if (!isAdminLogin && identifier.length !== 8) {
-      setError('El DNI debe tener 8 dígitos.');
-      return;
-    }
-    if (isAdminLogin && !identifier.includes('@')) {
-      setError('Ingrese un correo válido.');
-      return;
-    }
-    setStep(2); // Todos van a Huella
-  };
-
-  // --- PASO 2: HUELLA (MODO DEMO PARA PRESENTACIÓN) ---
-  const handleFingerprintAuth = async () => {
-    setIsLoading(true);
-    setError('');
-
-    try {
-      // ⏱️ Simulamos el tiempo que tardaría el lector y la red (1.5 segundos)
-      setTimeout(() => {
-        setIsLoading(false);
-        setStep(3); // Avanzar directamente al paso de Rostro
-      }, 1500);
-
-      /* --- CÓDIGO WEBAUTHN REAL (COMENTADO PARA PRODUCCIÓN FUTURA) ---
-      const field = isAdminLogin ? 'email' : 'dni';
-      const optionsRes = await axios.post('http://localhost:5002/api/biometrico/verify/fingerprint/options', { 
-        [field]: identifier 
-      });
-
-      const assertion = await startAuthentication(optionsRes.data.options);
-
-      const verifyRes = await axios.post('http://localhost:5002/api/biometrico/verify/fingerprint/verify', {
-        [field]: identifier,
-        credential_response: assertion
-      });
-
-      if (verifyRes.data.verified) setStep(3); 
-      ------------------------------------------------------------------ */
-
-    } catch (err) {
-      setError('Error en huella dactilar: ' + (err.response?.data?.error || err.message));
-      setIsLoading(false);
-    }
-  };
-
-  // --- PASO 3: ROSTRO (AWS) + LOGIN FINAL ---
   const handleFinalLogin = async () => {
     setIsLoading(true);
     setError('');
     try {
-      // 1. Buscar el aws_face_id del usuario
       const userRoute = isAdminLogin ? `by-email/${identifier}` : `by-dni/${identifier}`;
       const userRes = await axios.get(`http://localhost:80/api/usuarios/${userRoute}`);
       const awsFaceId = userRes.data.data.aws_face_id;
 
-      // 2. Verificar en AWS
       const faceBlob = base64ToBlob(photoUrl);
       const faceData = new FormData();
       faceData.append('face_photo', faceBlob, 'login.jpg');
@@ -121,7 +138,6 @@ export default function Login({ isAdminLogin = false }) {
       const awsRes = await axios.post('http://localhost:80/api/biometrico/verify/face', faceData);
 
       if (awsRes.data.verified) {
-        // 3. Login de sesión en ms_usuarios
         const loginData = isAdminLogin ? { email: identifier } : { dni: identifier };
         const result = await login(loginData);
         if (result.success) navigate(isAdminLogin ? '/admin/dashboard' : '/vote');
@@ -142,8 +158,8 @@ export default function Login({ isAdminLogin = false }) {
     <div className="min-h-screen flex items-center justify-center p-6 bg-cover bg-center"
       style={{ backgroundImage: 'linear-gradient(rgba(15, 23, 42, 0.6), rgba(15, 23, 42, 0.6)), url(/bg_institutional.png)' }}>
 
-      <main className="animate-fade-in w-full max-w-[460px] transition-all duration-500"
-        style={{ maxWidth: step === 1 ? '460px' : '600px' }}>
+      <main className="animate-fade-in w-full transition-all duration-500"
+        style={{ maxWidth: step === 1 ? '460px' : '640px' }}>
 
         <div className="flex flex-col items-center mb-8 text-center">
           <div className="flex items-center gap-3 mb-2">
@@ -155,18 +171,25 @@ export default function Login({ isAdminLogin = false }) {
           </p>
         </div>
 
+        {/* Stepper Dinámico */}
         {step > 1 && (
-          <div className="flex items-center justify-center gap-4 mb-8">
-            <StepIcon active={step === 2} done={step > 2} icon={<Fingerprint size={18} />} label="Huella" />
-            <div className={`h-0.5 w-10 ${step > 2 ? 'bg-green-500' : 'bg-white/20'}`} />
-            <StepIcon active={step === 3} done={false} icon={<Camera size={18} />} label="Rostro" />
+          <div className="flex items-center justify-center gap-3 mb-8">
+            {!isAdminLogin && (
+              <>
+                <StepIcon active={step === 2} done={step > 2} icon={<Barcode size={18} />} label="Físico" />
+                <div className={`h-0.5 w-6 ${step > 2 ? 'bg-green-500' : 'bg-white/20'}`} />
+              </>
+            )}
+            <StepIcon active={step === 3} done={step > 3} icon={<Fingerprint size={18} />} label="Huella" />
+            <div className={`h-0.5 w-6 ${step > 3 ? 'bg-green-500' : 'bg-white/20'}`} />
+            <StepIcon active={step === 4} done={false} icon={<Camera size={18} />} label="Rostro" />
           </div>
         )}
 
-        <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl">
+        <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
           {error && (
             <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm flex items-center gap-3 font-medium">
-              <AlertCircle size={18} /> {error}
+              <AlertCircle size={18} className="shrink-0" /> {error}
             </div>
           )}
 
@@ -195,29 +218,61 @@ export default function Login({ isAdminLogin = false }) {
             </form>
           )}
 
-          {step === 2 && (
-            <div className="flex flex-col items-center gap-6 text-center">
+          {step === 2 && !isAdminLogin && (
+            <div className="flex flex-col items-center gap-6 text-center animate-fade-in">
               <div>
-                <h2 className="text-2xl font-black">Validación Dactilar</h2>
-                <p className="text-slate-500">Use el sensor de su dispositivo</p>
+                <h2 className="text-2xl font-black">Validación de DNI</h2>
+                <p className="text-slate-500">Escanee el código de barras de su documento físico</p>
               </div>
-              <div className="w-full py-12 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50 flex flex-col items-center">
-                <Fingerprint size={60} className="text-blue-900/30 mb-4" />
-                <button onClick={handleFingerprintAuth} className="px-8 py-3 bg-blue-900 text-white rounded-xl font-bold flex items-center gap-2" disabled={isLoading}>
-                  {isLoading ? <Loader2 className="animate-spin" /> : 'Escanear Huella'}
+              <div className={`w-full py-10 border-2 border-dashed rounded-3xl flex flex-col items-center transition-colors duration-300 ${scannedDni && scannedDni === identifier ? 'bg-green-50 border-green-500' : 'bg-slate-50 border-slate-200'
+                }`}>
+                <Barcode size={60} className={`mb-4 transition-transform duration-500 ${scannedDni && scannedDni === identifier ? 'text-green-500 scale-110' : 'text-blue-900/30'}`} />
+
+                <button onClick={() => setIsBarcodeScannerOpen(true)} className="px-8 py-3 bg-blue-900 text-white rounded-xl font-bold flex items-center gap-2">
+                  <Camera size={18} /> {scannedDni ? 'Volver a escanear' : 'Activar Cámara Lector'}
+                </button>
+
+                {scannedDni && (
+                  <div className={`mt-6 font-black text-sm flex items-center gap-2 ${scannedDni === identifier ? 'text-green-600 animate-bounce' : 'text-red-600'}`}>
+                    {scannedDni === identifier ? <Check size={18} /> : <AlertCircle size={18} />}
+                    {scannedDni === identifier ? `DNI Verificado: ${scannedDni}` : 'DNI No Coincide'}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-4 w-full">
+                <button className="flex-1 py-4 border border-slate-200 rounded-2xl font-bold text-slate-500" onClick={() => setStep(1)}>Atrás</button>
+                <button className="flex-2 py-4 bg-blue-900 text-white rounded-2xl font-bold disabled:opacity-50" disabled={!scannedDni || scannedDni !== identifier} onClick={() => setStep(3)}>
+                  Validar Huella <ChevronRight size={18} className="inline" />
                 </button>
               </div>
-              <button className="text-sm font-bold text-slate-400" onClick={() => setStep(1)}>Volver</button>
             </div>
           )}
 
           {step === 3 && (
-            <div className="flex flex-col items-center gap-6">
+            <div className="flex flex-col items-center gap-6 text-center animate-fade-in">
+              <div>
+                <h2 className="text-2xl font-black">Validación Dactilar</h2>
+                <p className="text-slate-500">Use el sensor biométrico del dispositivo</p>
+              </div>
+              <div className="w-full py-12 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50 flex flex-col items-center">
+                <Fingerprint size={60} className="text-blue-900/30 mb-4" />
+                <button onClick={handleFingerprintAuth} className="px-8 py-3 bg-blue-900 text-white rounded-xl font-bold flex items-center gap-2" disabled={isLoading}>
+                  {isLoading ? <Loader2 className="animate-spin" /> : 'Escanear Huella (Demo)'}
+                </button>
+              </div>
+              <div className="flex w-full">
+                <button className="text-sm font-bold text-slate-400 mx-auto" onClick={() => setStep(isAdminLogin ? 1 : 2)}>Volver</button>
+              </div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="flex flex-col items-center gap-6 animate-fade-in">
               <div className="text-center">
                 <h2 className="text-2xl font-black">Validación Facial</h2>
-                <p className="text-slate-500">Mire a la cámara o suba una foto</p>
+                <p className="text-slate-500">Mire a la cámara frontal</p>
               </div>
-              <div className="w-full aspect-video rounded-3xl overflow-hidden bg-slate-900 relative border-4 border-slate-100">
+              <div className="w-full aspect-video rounded-3xl overflow-hidden bg-slate-900 relative border-4 border-slate-100 shadow-inner">
                 {!photoUrl ? (
                   <Webcam audio={false} ref={webcamRef} screenshotFormat="image/jpeg" className="w-full h-full object-cover scale-x-[-1]" />
                 ) : (
@@ -237,7 +292,7 @@ export default function Login({ isAdminLogin = false }) {
                   </>
                 ) : (
                   <div className="flex gap-4">
-                    <button onClick={() => setPhotoUrl(null)} className="flex-1 py-4 border border-slate-200 rounded-2xl font-bold">Reintentar</button>
+                    <button onClick={() => setPhotoUrl(null)} className="flex-1 py-4 border border-slate-200 rounded-2xl font-bold text-slate-500">Reintentar</button>
                     <button onClick={handleFinalLogin} className="flex-2 py-4 bg-green-600 text-white rounded-2xl font-bold" disabled={isLoading}>
                       {isLoading ? <Loader2 className="animate-spin" /> : 'Confirmar Identidad'}
                     </button>
@@ -248,6 +303,12 @@ export default function Login({ isAdminLogin = false }) {
           )}
         </div>
       </main>
+
+      <BarcodeScanner
+        isOpen={isBarcodeScannerOpen}
+        onClose={() => setIsBarcodeScannerOpen(false)}
+        onScanSuccess={handleBarcodeScan}
+      />
     </div>
   );
 }
@@ -255,7 +316,7 @@ export default function Login({ isAdminLogin = false }) {
 function StepIcon({ active, done, icon, label }) {
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className={`w-12 h-12 rounded-xl flex items-center justify-center border-2 transition-all ${done ? 'bg-green-500 border-green-500 text-white' : active ? 'bg-white border-blue-900 text-blue-900 scale-110' : 'bg-white/10 border-white/20 text-white/50'}`}>
+      <div className={`w-12 h-12 rounded-xl flex items-center justify-center border-2 transition-all duration-300 ${done ? 'bg-green-500 border-green-500 text-white shadow-lg shadow-green-500/20' : active ? 'bg-white border-blue-900 text-blue-900 scale-110 shadow-xl' : 'bg-white/10 border-white/20 text-white/50'}`}>
         {icon}
       </div>
       <span className="text-[10px] text-white font-black uppercase tracking-widest">{label}</span>

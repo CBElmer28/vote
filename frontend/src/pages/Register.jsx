@@ -129,16 +129,16 @@ export default function Register({ inDashboard = false }) {
       const faceFormData = new FormData();
       faceFormData.append('face_photo', faceBlob, 'rostro.jpg');
 
-      const faceRes = await axios.post('http://localhost:5002/api/biometrico/register/face', faceFormData);
+      const faceRes = await axios.post('http://localhost:80/api/biometrico/register/face', faceFormData);
       const awsFaceId = faceRes.data.aws_face_id;
 
       // 2. Registrar Huella (WebAuthn)
       // a) Pedir opciones al backend
-      const optionsRes = await axios.post('http://localhost:5002/api/biometrico/register/fingerprint/options', { email: formData.email });
+      const optionsRes = await axios.post('http://localhost:80/api/biometrico/register/fingerprint/options', { email: formData.email });
       // b) El navegador pide la huella local (Windows Hello/TouchID)
       const credential = await startRegistration(optionsRes.data.options);
       // c) Enviar firma al backend
-      const webauthnRes = await axios.post('http://localhost:5002/api/biometrico/register/fingerprint/verify', {
+      const webauthnRes = await axios.post('http://localhost:80/api/biometrico/register/fingerprint/verify', {
         email: formData.email,
         credential
       });
