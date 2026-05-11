@@ -86,9 +86,21 @@ export default function Login({ isAdminLogin = false }) {
 
     try {
       // Temporizador para simular lectura en Modo Demo
-      setTimeout(() => {
-        setIsLoading(false);
-        setStep(4); // Avanzar a Rostro
+      setTimeout(async () => {
+        if (isAdminLogin) {
+          try {
+            const result = await login({ email: identifier });
+            if (result.success) navigate('/admin/dashboard');
+            else setError(result.error);
+          } catch (err) {
+            setError('Error al iniciar sesión como administrador.');
+          } finally {
+            setIsLoading(false);
+          }
+        } else {
+          setIsLoading(false);
+          setStep(4); // Avanzar a Rostro para ciudadanos
+        }
       }, 1500);
 
       /* --- CÓDIGO REAL (Descomentar en producción) ---
@@ -98,7 +110,15 @@ export default function Login({ isAdminLogin = false }) {
       const verifyRes = await axios.post('http://localhost:80/api/biometrico/verify/fingerprint/verify', {
         [field]: identifier, credential_response: assertion
       });
-      if (verifyRes.data.verified) setStep(4); 
+      if (verifyRes.data.verified) {
+        if (isAdminLogin) {
+          const result = await login({ email: identifier });
+          if (result.success) navigate('/admin/dashboard');
+          else setError(result.error);
+        } else {
+          setStep(4);
+        }
+      }
       -------------------------------------------------- */
 
     } catch (err) {

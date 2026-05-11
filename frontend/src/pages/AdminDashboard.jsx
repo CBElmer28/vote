@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Register from './Register';
 import CandidateManager from '../components/CandidateManager';
+import UserManager from '../components/UserManager';
 import { useTranslation } from 'react-i18next';
 import { Users, LogOut, FileText, LayoutDashboard, ChevronRight, UserCircle, Globe, Accessibility, Moon, Sun } from 'lucide-react';
 import { useAccessibility } from '../context/AccessibilityContext';
@@ -15,6 +16,7 @@ export default function AdminDashboard() {
   const { settings, toggleTheme } = useAccessibility();
   const [showAccessibility, setShowAccessibility] = useState(false);
   const [activeTab, setActiveTab] = useState('voters');
+  const [userTypeFilter, setUserTypeFilter] = useState('all'); // all, voters, admins
 
   const handleLogout = () => {
     logout();
@@ -29,35 +31,6 @@ export default function AdminDashboard() {
         {/* Brand */}
         <div className="flex items-center gap-3 mb-8">
           <h2 className="text-xl font-black tracking-tight uppercase text-white">{t('admin.portal')}</h2>
-        </div>
-
-        {/* Global Controls */}
-        <div className="flex items-center gap-3 mb-8">
-          <button 
-            onClick={() => setShowAccessibility(true)} 
-            className="flex-1 flex items-center justify-center gap-2 p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-all text-white font-bold text-xs"
-          >
-            <Accessibility size={16} /> {t('admin.accessibility')}
-          </button>
-          <button 
-            onClick={toggleTheme} 
-            className="p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-all text-white"
-          >
-            {settings.theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
-          </button>
-        </div>
-
-        {/* Language Switcher */}
-        <div className="relative group cursor-pointer z-50 mb-8">
-          <div className="flex items-center gap-2 px-4 py-3 bg-white/10 border border-white/10 rounded-2xl shadow-sm hover:bg-white/20 transition-all text-white font-bold text-sm uppercase">
-            <Globe size={18} />
-            <span>{t('login.language')}</span>
-          </div>
-          <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden border border-slate-100">
-            <button onClick={() => i18n.changeLanguage('es')} className="w-full text-left px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-primary-blue">ESPAÑOL</button>
-            <button onClick={() => i18n.changeLanguage('en')} className="w-full text-left px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-primary-blue">ENGLISH</button>
-            <button onClick={() => i18n.changeLanguage('qu')} className="w-full text-left px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-primary-blue">QUECHUA</button>
-          </div>
         </div>
 
         {/* Profile Summary */}
@@ -79,6 +52,13 @@ export default function AdminDashboard() {
             onClick={() => setActiveTab('voters')}
             icon={<Users size={20} />}
             label={t('admin.register_voter')}
+          />
+          
+          <SidebarButton 
+            active={activeTab === 'users'} 
+            onClick={() => setActiveTab('users')}
+            icon={<UserCircle size={20} />}
+            label={t('userManager.title')}
           />
           
           <SidebarButton 
@@ -105,6 +85,12 @@ export default function AdminDashboard() {
         {activeTab === 'voters' && (
           <div className="animate-fade-in h-full">
             <Register inDashboard={true} />
+          </div>
+        )}
+
+        {activeTab === 'users' && (
+          <div className="animate-fade-in h-full overflow-y-auto">
+            <UserManager />
           </div>
         )}
 

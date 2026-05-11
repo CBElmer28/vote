@@ -1,11 +1,16 @@
 import os
 import logging
 from flask import Blueprint, request, jsonify, current_app
+from webauthn.helpers import options_to_json
+import json
 from app.services.face_service import get_face_service
 from app.services.fingerprint_service import get_fingerprint_service
 
 logger = logging.getLogger(__name__)
 biometrico_bp = Blueprint("biometrico", __name__)
+
+# Almacén temporal de challenges (en producción usar Redis)
+challenges_db = {}
 
 @biometrico_bp.route("/health", methods=["GET"])
 def health():
@@ -72,8 +77,68 @@ def get_fingerprint_options():
     # TODO: Debes guardar result["challenge"] en una base de datos temporal,
     # Redis o Cache atado al user_id para compararlo en el PASO 2.
 
-    # options.json_dict() formatea la data para que el frontend (React) la consuma fácilmente
-    return jsonify({"options": result["options"]}), 200
+    # Transformamos el objeto a JSON string y luego a dict de Python
+    options_json = options_to_json(result["options"])
+    resp_data = json.loads(options_json)
+    
+    # Guardamos el challenge asociado al usuario para el Paso 2
+    challenges_db[f"auth_{user_id}"] = result["challenge"]
+    
+    return jsonify({"options": resp_data}), 200
+
+
+@biometrico_bp.route("/register/fingerprint/options", methods=["POST"])
+def get_registration_options():
+    """
+    PASO 1 (Registro): El frontend pide opciones para crear nueva huella.
+    """
+    data = request.get_json()
+    user_id = data.get("user_id")
+    user_name = data.get("user_name", "User")
+    
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+
+    service = get_fingerprint_service()
+    result = service.generate_registration_options(user_id, user_name)
+
+    if not result["success"]:
+        return jsonify({"error": result["error"]}), 500
+
+    challenges_db[f"reg_{user_id}"] = result["challenge"]
+    
+    # Serialización correcta para la versión actual de la librería
+    options_json = options_to_json(result["options"])
+    resp_data = json.loads(options_json)
+    
+    return jsonify({"options": resp_data}), 200
+
+
+@biometrico_bp.route("/register/fingerprint/verify", methods=["POST"])
+def verify_registration():
+    """
+    PASO 2 (Registro): El frontend envía la nueva credencial generada.
+    """
+    data = request.get_json()
+    user_id = data.get("user_id")
+    credential_response = data.get("credential_response")
+
+    if not user_id or not credential_response:
+        return jsonify({"error": "Datos incompletos"}), 400
+
+    expected_challenge = challenges_db.get(f"reg_{user_id}")
+    if not expected_challenge:
+        return jsonify({"error": "Sesión de registro expirada o no iniciada"}), 400
+
+    service = get_fingerprint_service()
+    result = service.verify_registration_response(credential_response, expected_challenge)
+
+    if result.get("verified"):
+        # Limpiamos el challenge
+        del challenges_db[f"reg_{user_id}"]
+        return jsonify(result), 200
+    else:
+        return jsonify(result), 400
 
 
 @biometrico_bp.route("/verify/fingerprint/verify", methods=["POST"])
@@ -90,12 +155,18 @@ def verify_fingerprint_signature():
         return jsonify({"error": "user_id y credential_response son requeridos"}), 400
 
     # TODO: 1. Recuperar el expected_challenge guardado en el Paso 1.
-    expected_challenge = b'expected_challenge_from_db_or_redis'
+    expected_challenge = challenges_db.get(f"auth_{user_id}")
+    if not expected_challenge:
+        return jsonify({"error": "Sesión de autenticación expirada o no iniciada"}), 400
     
-    # TODO: 2. Recuperar la llave pública del usuario desde la DB
-    # usuario = Usuario.query.get(user_id)
-    # public_key = usuario.webauthn_public_key
-    public_key = b'simulated_public_key'
+    # TODO: 2. Recuperar la llave pública del usuario (esto debería venir de la DB real)
+    # Por ahora simulamos que la recuperamos del body para esta prueba técnica, 
+    # pero en un sistema real se lee de la tabla 'users' por su DNI/ID.
+    public_key_hex = data.get("public_key")
+    if not public_key_hex:
+        return jsonify({"error": "public_key is required for verification"}), 400
+    
+    public_key = bytes.fromhex(public_key_hex)
 
     service = get_fingerprint_service()
     result = service.verify_response(credential_response, expected_challenge, public_key)

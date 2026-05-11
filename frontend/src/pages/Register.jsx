@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,8 @@ import {
   AlertCircle, CheckCircle, Loader2, MapPin, Calendar, Phone
 } from 'lucide-react';
 import { startRegistration } from '@simplewebauthn/browser';
+import Webcam from 'react-webcam';
+import { Fingerprint as FingerIcon, Camera, Upload } from 'lucide-react';
 
 import countriesData from '../data/countries.json';
 import departmentsData from '../data/departments.json';
@@ -35,6 +37,8 @@ export default function Register({ inDashboard = false }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState(null);
+  const webcamRef = useRef(null);
   const navigate = useNavigate();
 
   // Derived state for cascading selects
@@ -125,35 +129,51 @@ export default function Register({ inDashboard = false }) {
 
     try {
       // 1. Registrar Rostro en AWS
-      const faceBlob = base64ToBlob(photoUrl);
-      const faceFormData = new FormData();
-      faceFormData.append('face_photo', faceBlob, 'rostro.jpg');
+      let awsFaceId = null;
+      if (photoUrl) {
+        const faceBlob = base64ToBlob(photoUrl);
+        const faceFormData = new FormData();
+        faceFormData.append('face_photo', faceBlob, 'rostro.jpg');
+        
+        const faceRes = await axios.post('/api/biometrico/register/face', faceFormData);
+        awsFaceId = faceRes.data.aws_face_id;
+      }
 
-      const faceRes = await axios.post('http://localhost:80/api/biometrico/register/face', faceFormData);
-      const awsFaceId = faceRes.data.aws_face_id;
+      // 2. Registrar Huella Real (WebAuthn)
+      let webauthnData = { credential_id: null, public_key: null };
+      
+      try {
+        const optionsRes = await axios.post('/api/biometrico/register/fingerprint/options', { 
+          user_id: formData.dni, // Usamos DNI como ID temporal para el challenge
+          user_name: formData.first_name 
+        });
+        
+        const credential = await startRegistration(optionsRes.data.options);
+        
+        const webauthnRes = await axios.post('/api/biometrico/register/fingerprint/verify', {
+          user_id: formData.dni,
+          credential_response: credential
+        });
+        
+        webauthnData = { 
+          credential_id: webauthnRes.data.credential_id, 
+          public_key: webauthnRes.data.public_key 
+        };
+      } catch (fErr) {
+        console.error("Error en registro de huella:", fErr);
+        throw new Error("No se pudo completar el registro de huella dactilar. Asegúrese de usar un dispositivo compatible.");
+      }
 
-      // 2. Registrar Huella (WebAuthn)
-      // a) Pedir opciones al backend
-      const optionsRes = await axios.post('http://localhost:80/api/biometrico/register/fingerprint/options', { email: formData.email });
-      // b) El navegador pide la huella local (Windows Hello/TouchID)
-      const credential = await startRegistration(optionsRes.data.options);
-      // c) Enviar firma al backend
-      const webauthnRes = await axios.post('http://localhost:80/api/biometrico/register/fingerprint/verify', {
-        email: formData.email,
-        credential
-      });
-
-      // 3. Guardar el Usuario final en ms_usuarios
+      // 3. Guardar el Usuario final
       const finalUserData = {
         ...formData,
         aws_face_id: awsFaceId,
-        webauthn_credential_id: webauthnRes.data.credential_id, // Lo que te devuelva el backend
-        webauthn_public_key: webauthnRes.data.public_key
+        webauthn_credential_id: webauthnData.credential_id,
+        webauthn_public_key: webauthnData.public_key
       };
 
-      await axios.post('http://localhost:80/api/usuarios/', finalUserData);
-      setStep(5); // Pantalla de Éxito
-
+      await axios.post('/api/usuarios/', finalUserData);
+      setStep(6); // Pantalla de Éxito
     } catch (err) {
       setError(err.response?.data?.error || t('login.err_biometric'));
     } finally {
@@ -179,18 +199,19 @@ export default function Register({ inDashboard = false }) {
     });
     setStep(1);
     setSuccess(false);
+    setPhotoUrl(null);
   };
 
   // UI Components
   const renderStepper = () => (
     <div className="flex items-center justify-center mb-10">
-      {[1, 2, 3].map((num, i) => (
+      {[1, 2, 3, 4, 5].map((num, i) => (
         <div key={num} className="flex items-center">
           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all duration-300 ${step >= num ? 'bg-[#1e3a8a] text-white shadow-lg' : 'bg-slate-100 text-slate-400'
             }`}>
             {num}
           </div>
-          {i < 2 && (
+          {i < 4 && (
             <div className={`w-12 h-1 transition-all duration-300 ${step > num ? 'bg-[#1e3a8a]' : 'bg-slate-100'
               }`} />
           )}
@@ -214,7 +235,7 @@ export default function Register({ inDashboard = false }) {
 
         <div className={`transition-all duration-500 bg-white ${inDashboard ? 'flat-card !p-10' : 'p-12'}`}>
 
-          {step !== 4 && (
+          {step < 6 && (
             <>
               <div className="mb-8 text-center">
                 <h2 className="text-2xl font-black text-[#1e3a8a] mb-1">
@@ -374,8 +395,77 @@ export default function Register({ inDashboard = false }) {
               </div>
             )}
 
-            {/* STEP 4 (Success) */}
+            {/* STEP 4: Face */}
             {step === 4 && (
+              <div className="animate-fade-in space-y-6 text-center">
+                <div className="mb-4">
+                  <h2 className="text-2xl font-black text-[#1e3a8a]">{t('vote.face_title')}</h2>
+                  <p className="text-slate-500 text-sm">{t('vote.face_desc')}</p>
+                </div>
+                
+                <div className="w-full aspect-video rounded-[2.5rem] overflow-hidden bg-slate-900 relative border-4 border-white shadow-2xl">
+                  {!photoUrl ? (
+                    <Webcam audio={false} ref={webcamRef} screenshotFormat="image/jpeg" className="w-full h-full object-cover scale-x-[-1]" />
+                  ) : (
+                    <img src={photoUrl} className="w-full h-full object-cover" />
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  {!photoUrl ? (
+                    <>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const imageSrc = webcamRef.current.getScreenshot();
+                          if (imageSrc) setPhotoUrl(imageSrc);
+                        }} 
+                        className="w-full py-4 bg-[#1e3a8a] text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg"
+                      >
+                        <Camera size={20} /> {t('vote.capture_photo')}
+                      </button>
+                      <input type="file" id="f-up-reg" accept="image/*" onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => setPhotoUrl(reader.result);
+                          reader.readAsDataURL(file);
+                        }
+                      }} className="hidden" />
+                      <label htmlFor="f-up-reg" className="w-full py-3 border border-slate-200 text-slate-500 rounded-2xl font-bold flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50 transition-all">
+                        <Upload size={18} /> {t('admin.select_file')}
+                      </label>
+                    </>
+                  ) : (
+                    <button type="button" onClick={() => setPhotoUrl(null)} className="w-full py-4 border-2 border-slate-200 text-slate-500 rounded-2xl font-bold">
+                      {t('vote.retry')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* STEP 5: Fingerprint */}
+            {step === 5 && (
+              <div className="animate-fade-in space-y-6 text-center">
+                <div className="mb-4">
+                  <h2 className="text-2xl font-black text-[#1e3a8a]">{t('register.fingerprint_registration_title')}</h2>
+                  <p className="text-slate-500 text-sm">{t('register.fingerprint_registration_subtitle')}</p>
+                </div>
+                <div className="w-full py-12 border-2 border-dashed border-slate-200 rounded-[2.5rem] bg-slate-50 flex flex-col items-center">
+                  <FingerIcon size={64} className={`mb-4 transition-all ${step === 5 ? 'text-[#1e3a8a] animate-pulse' : 'text-slate-200'}`} />
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">
+                    {t('register.webauthn_module')}
+                  </p>
+                  <div className="px-10 py-6 bg-blue-50 text-[#1e3a8a] rounded-3xl font-bold text-sm border border-blue-100 mb-2 max-w-md mx-auto leading-relaxed">
+                    {t('register.fingerprint_instruction')}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 6 (Success) */}
+            {step === 6 && (
               <div className="animate-fade-in flex flex-col items-center justify-center text-center py-10">
                 <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-6 shadow-xl shadow-green-100/50">
                   <CheckCircle size={48} className="text-green-500" />
@@ -392,7 +482,7 @@ export default function Register({ inDashboard = false }) {
           </div>
 
           {/* Navigation Buttons */}
-          {step < 4 && (
+          {step < 6 && (
             <div className="flex gap-4 mt-8 pt-8 border-t border-slate-100">
               {step > 1 ? (
                 <button type="button" onClick={prevStep} className="glass-button secondary !w-auto px-8">
@@ -406,12 +496,12 @@ export default function Register({ inDashboard = false }) {
                 )
               )}
 
-              {step < 3 ? (
+              {step < 5 ? (
                 <button type="button" onClick={nextStep} className="glass-button flex-1 bg-[#1e3a8a]">
                   {t('register.next')} <ChevronRight size={18} />
                 </button>
               ) : (
-                <button type="button" onClick={handleSubmit} className="glass-button flex-1 bg-green-600 hover:bg-green-700 border-none" disabled={isLoading}>
+                <button type="button" onClick={handleSubmit} className="glass-button flex-1 bg-green-600 hover:bg-green-700 border-none" disabled={isLoading || !photoUrl}>
                   {isLoading ? <Loader2 className="animate-spin" size={20} /> : <CheckCircle size={18} />}
                   {isLoading ? t('register.submitting') : t('register.submit')}
                 </button>

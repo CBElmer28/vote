@@ -29,7 +29,7 @@ export default function GlobalControls() {
 
   return (
     <>
-      <div className="fixed top-8 right-8 flex flex-col gap-3 z-[100]">
+      <div className="fixed bottom-10 right-8 flex flex-col gap-3 z-[100]">
         {/* Language Selector */}
         <div className="relative">
           <button
