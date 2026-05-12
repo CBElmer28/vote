@@ -1,10 +1,15 @@
 import logging
+import json
 from flask import current_app
 from webauthn import (
     generate_authentication_options,
     verify_authentication_response,
     generate_registration_options,
     verify_registration_response,
+)
+from webauthn.helpers import (
+    parse_authentication_credential_json,
+    parse_registration_credential_json
 )
 from webauthn.helpers.structs import (
     AuthenticationCredential,
@@ -51,7 +56,7 @@ class WebAuthnFingerprintService:
 
     def verify_response(self, credential_response: dict, expected_challenge: bytes, public_key: bytes) -> dict:
         try:
-            credential = AuthenticationCredential.parse_raw(credential_response)
+            credential = parse_authentication_credential_json(json.dumps(credential_response))
 
             verification = verify_authentication_response(
                 credential=credential,
@@ -101,7 +106,7 @@ class WebAuthnFingerprintService:
 
     def verify_registration_response(self, credential_response: dict, expected_challenge: bytes) -> dict:
         try:
-            credential = RegistrationCredential.parse_raw(credential_response)
+            credential = parse_registration_credential_json(json.dumps(credential_response))
             
             verification = verify_registration_response(
                 credential=credential,
@@ -111,13 +116,17 @@ class WebAuthnFingerprintService:
                 require_user_verification=True
             )
             
+            import base64
+            
             return {
                 "verified": True,
-                "credential_id": verification.credential_id.decode('utf-8') if isinstance(verification.credential_id, bytes) else verification.credential_id,
+                "credential_id": base64.urlsafe_b64encode(verification.credential_id).decode('utf-8').rstrip('='),
                 "public_key": verification.credential_public_key.hex()
             }
         except Exception as e:
+            import traceback
             logger.error(f"Fallo registro WebAuthn: {str(e)}")
+            logger.error(traceback.format_exc())
             return {"verified": False, "error": str(e)}
 
 def get_fingerprint_service():

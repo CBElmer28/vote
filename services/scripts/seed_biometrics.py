@@ -44,12 +44,12 @@ def seed_biometrics():
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor(dictionary=True)
     except Exception as e:
-        print(f"❌ Error al conectar a la Base de Datos. ¿Está corriendo Docker? Detalle: {e}")
+        print(f"Error al conectar a la Base de Datos. ¿Está corriendo Docker? Detalle: {e}")
         return
 
     # Leer la carpeta de fotos
     if not os.path.exists(FACES_DIR):
-        print(f"❌ No se encontró la carpeta: {FACES_DIR}")
+        print(f"No se encontró la carpeta: {FACES_DIR}")
         return
 
     fotos_procesadas = 0
@@ -66,7 +66,7 @@ def seed_biometrics():
             user = cursor.fetchone()
             
             if not user:
-                print(f" ❌ DNI {dni} no encontrado en la tabla 'users'. Saltando...")
+                print(f"DNI {dni} no encontrado en la tabla 'users'. Saltando...")
                 continue
                 
             user_id = user['id']
@@ -93,17 +93,17 @@ def seed_biometrics():
                         (face_id, user_id)
                     )
                     conn.commit()
-                    print(f" ✅ Éxito: Vector biométrico vinculado (FaceId: {face_id})")
+                    print(f"Exito: Vector biométrico vinculado (FaceId: {face_id})")
                     fotos_procesadas += 1
                 else:
-                    print(f" ⚠️ AWS no detectó un rostro claro en la foto {filename}")
+                    print(f"Advertencia: AWS no detectó un rostro claro en la foto {filename}")
 
             except Exception as e:
-                print(f" ❌ Error procesando en AWS: {e}")
+                print(f"Error procesando en AWS: {e}")
 
     cursor.close()
     conn.close()
     print(f"\nProceso finalizado. {fotos_procesadas} rostros sincronizados exitosamente.")
 
 if __name__ == "__main__":
-    seed_biometrics()
+    seed_biometrics()
