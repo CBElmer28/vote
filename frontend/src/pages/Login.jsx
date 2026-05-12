@@ -88,15 +88,8 @@ export default function Login({ isAdminLogin = false }) {
       // Temporizador para simular lectura en Modo Demo
       setTimeout(async () => {
         if (isAdminLogin) {
-          try {
-            const result = await login({ email: identifier });
-            if (result.success) navigate('/admin/dashboard');
-            else setError(result.error);
-          } catch (err) {
-            setError('Error al iniciar sesión como administrador.');
-          } finally {
-            setIsLoading(false);
-          }
+          setStep(4); // Ahora el administrador va al paso de rostro
+          setIsLoading(false);
         } else {
           setIsLoading(false);
           setStep(4); // Avanzar a Rostro para ciudadanos
@@ -226,6 +219,7 @@ export default function Login({ isAdminLogin = false }) {
                 <div className="relative">
                   {isAdminLogin ? <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} /> : <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />}
                   <input
+                    name="identifier"
                     className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-500 outline-none font-bold"
                     value={identifier}
                     onChange={(e) => setIdentifier(isAdminLogin ? e.target.value : e.target.value.replace(/\D/g, ''))}

@@ -14,6 +14,8 @@
     "citizen_portal": "Akllaqkunapa Punkun",
     "admin_portal": "Kamachiqpa Punkun",
     "language": "QUECHUA",
+    "change_language": "Llasp'ay t'ikrachiy",
+    "select_language": "Akllay Llasp'ayta",
     "validate_identity": "Kikiyki kasqaykita Chiqapchay",
     "barcode_validation": "DNI Chiqapchay",
     "barcode_instruction": "DNI nisqaykipa código de barras nisqanta camara ñawpaqman churay",
@@ -136,7 +138,11 @@
     "err_size": "Hatunmi kay rikch'a. Aswan 2MB.",
     "err_fetch": "Yupaykuna kargaypi pantay kashan.",
     "err_process": "Mañakuyta ruwaypi pantay kashan.",
-    "accessibility": "ACCESIBILIDAD"
+    "accessibility": "ACCESIBILIDAD",
+    "role_president": "Umalliq",
+    "role_vp1": "1er Umalliq-rantin",
+    "role_vp2": "2do Umalliq-rantin",
+    "role_candidate": "Akllakuq"
   },
   "register": {
     "title": "Llaqtaruna Qillqay",

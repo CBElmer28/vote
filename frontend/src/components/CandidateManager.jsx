@@ -46,9 +46,9 @@ export default function PartyManager() {
         symbol_url: item.party_symbol_url || item.photo_url,
         is_active: item.is_active,
         members: item.members || [
-          { id: Date.now() + 1, name: item.full_name, role: 'Presidente', photo: item.photo_url },
-          { id: Date.now() + 2, name: 'Primer Vicepresidente', role: '1er Vicepresidente', photo: '' },
-          { id: Date.now() + 3, name: 'Segundo Vicepresidente', role: '2do Vicepresidente', photo: '' }
+          { id: Date.now() + 1, name: item.full_name, role: t('admin.role_president'), photo: item.photo_url },
+          { id: Date.now() + 2, name: '', role: t('admin.role_vp1'), photo: '' },
+          { id: Date.now() + 3, name: '', role: t('admin.role_vp2'), photo: '' }
         ]
       }));
       setParties(adaptedData);
@@ -65,9 +65,9 @@ export default function PartyManager() {
   }, []);
 
   const defaultMembers = [
-    { id: 1, name: '', role: 'Presidente', photo: '' },
-    { id: 2, name: '', role: '1er Vicepresidente', photo: '' },
-    { id: 3, name: '', role: '2do Vicepresidente', photo: '' }
+    { id: 1, name: '', role: t('admin.role_president'), photo: '' },
+    { id: 2, name: '', role: t('admin.role_vp1'), photo: '' },
+    { id: 3, name: '', role: t('admin.role_vp2'), photo: '' }
   ];
 
   const handleOpenModal = (party = null) => {
@@ -96,7 +96,7 @@ export default function PartyManager() {
     const newMember = { 
       id: Date.now(), 
       name: '', 
-      role: 'Candidato', 
+      role: t('admin.role_candidate'), 
       photo: '' 
     };
     setCurrentParty(prev => ({
@@ -351,7 +351,7 @@ export default function PartyManager() {
                               <div className="relative">
                                 <input 
                                   className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all duration-300 w-full max-w-[160px] outline-none focus:ring-2 focus:ring-primary-blue/30 ${
-                                    member.role.toLowerCase().includes('presidente') && !member.role.toLowerCase().includes('vice')
+                                    member.role === t('admin.role_president')
                                       ? 'bg-primary-navy text-white shadow-lg shadow-primary-navy/20' 
                                       : 'bg-primary-blue/10 text-primary-blue border border-primary-blue/20'
                                   }`}

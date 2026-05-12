@@ -69,6 +69,7 @@ export default function GlobalControls() {
           onClick={() => setShowAccessibility(true)}
           className={buttonClass}
           title={t('admin.accessibility')}
+          data-testid="accessibility-trigger"
         >
           <Accessibility size={22} className="group-hover:scale-110 transition-transform" />
         </button>

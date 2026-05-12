@@ -14,6 +14,8 @@
     "citizen_portal": "Portal de Votantes",
     "admin_portal": "Portal Administrativo",
     "language": "ESPAÑOL",
+    "change_language": "Cambiar Idioma",
+    "select_language": "Seleccionar Idioma",
     "validate_identity": "Validar Identidad",
     "barcode_validation": "Validación de DNI",
     "barcode_instruction": "Escanee el código de barras de su DNI físico",
@@ -135,7 +137,11 @@
     "err_size": "La imagen es demasiado grande. Máximo 2MB.",
     "err_fetch": "Error al cargar los datos institucionales.",
     "err_process": "Error al procesar la solicitud.",
-    "accessibility": "ACCESIBILIDAD"
+    "accessibility": "ACCESIBILIDAD",
+    "role_president": "Presidente",
+    "role_vp1": "1er Vicepresidente",
+    "role_vp2": "2do Vicepresidente",
+    "role_candidate": "Candidato"
   },
   "register": {
     "title": "Registro Civil",
