@@ -483,7 +483,7 @@ export default function Register({ inDashboard = false }) {
                       <label htmlFor="f-up-finger-reg" className="px-10 py-6 bg-blue-50 text-[#1e3a8a] rounded-3xl font-bold text-sm border border-blue-100 mb-2 max-w-md mx-auto leading-relaxed cursor-pointer hover:bg-blue-100 transition-all shadow-md">
                         {fingerprintFile ? fingerprintFile.name : t('register.fingerprint_instruction')}
                       </label>
-                      <p className="text-xs text-slate-400 mt-2">Formatos permitidos: JPG, PNG, BMP (FVC2002/2004)</p>
+                      <p className="text-xs text-slate-400 mt-2">Formatos permitidos: JPG, PNG, BMP, TIF (FVC2002/2004)</p>
                     </>
                   )}
                 </div>

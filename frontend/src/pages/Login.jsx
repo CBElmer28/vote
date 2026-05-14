@@ -319,6 +319,7 @@ export default function Login({ isAdminLogin = false }) {
                     <label htmlFor="f-up-finger-login" className="px-8 py-3 bg-blue-900 text-white rounded-xl font-bold flex items-center gap-2 cursor-pointer mb-4 hover:scale-105 transition-transform active:scale-95 shadow-lg shadow-blue-900/20">
                       <Upload size={18} /> {fingerprintFile ? fingerprintFile.name : t('admin.select_file')}
                     </label>
+                    <p className="text-[10px] text-slate-400 mb-4">JPG, PNG, BMP, TIF</p>
                     <button 
                       onClick={handleFingerprintAuth} 
                       className={`px-8 py-3 border-2 border-blue-900 text-blue-900 rounded-xl font-bold flex items-center gap-2 transition-all ${!fingerprintFile ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-900 hover:text-white'}`} 

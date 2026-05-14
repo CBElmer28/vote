@@ -15,10 +15,14 @@ class FingerprintMinutiaeService:
         Pipeline: Grayscale -> CLAHE -> Binarización -> Thinning
         """
         try:
-            # 1. Decodificar imagen
-            nparr = np.frombuffer(image_bytes, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
-            if img is None:
+            # 1. Decodificar imagen usando Pillow para máxima compatibilidad (TIFF, BMP, etc.)
+            from PIL import Image
+            import io
+            
+            img_pil = Image.open(io.BytesIO(image_bytes)).convert('L')
+            img = np.array(img_pil)
+            
+            if img is None or img.size == 0:
                 raise ValueError("No se pudo decodificar la imagen")
 
             # 2. Normalización (CLAHE)
