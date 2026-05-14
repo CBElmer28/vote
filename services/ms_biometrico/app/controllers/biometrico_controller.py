@@ -5,6 +5,7 @@ from webauthn.helpers import options_to_json
 import json
 from app.services.face_service import get_face_service
 from app.services.fingerprint_service import get_fingerprint_service
+from app.services.fingerprint_minutiae_service import get_fingerprint_minutiae_service
 
 logger = logging.getLogger(__name__)
 biometrico_bp = Blueprint("biometrico", __name__)
@@ -175,6 +176,77 @@ def verify_fingerprint_signature():
         return jsonify(result), 200
     else:
         return jsonify(result), 401
+
+# ----------------- NUEVOS ENDPOINTS MINUCIAS (ISO/IEC 19794-2) -----------------
+
+@biometrico_bp.route("/register/fingerprint/minutiae", methods=["POST"])
+def register_fingerprint_minutiae():
+    """
+    Extrae un template de minucias a partir de una imagen para registro inicial.
+    """
+    if "fingerprint_image" not in request.files:
+        return jsonify({"error": "File 'fingerprint_image' is required"}), 400
+
+    image_bytes = request.files["fingerprint_image"].read()
+    service = get_fingerprint_minutiae_service()
+    
+    skeleton = service.preprocess(image_bytes)
+    if skeleton is None:
+        return jsonify({"error": "Error al procesar la imagen de la huella"}), 400
+        
+    minutiae_list = service.extract_minutiae(skeleton)
+    template = service.generate_iso_template(minutiae_list)
+    
+    return jsonify({
+        "message": "Template de minucias generado correctamente",
+        "iso_template": template
+    }), 200
+
+@biometrico_bp.route("/verify/fingerprint/minutiae", methods=["POST"])
+def verify_fingerprint_minutiae():
+    """
+    Compara una imagen de huella contra un template de referencia almacenado.
+    """
+    if "fingerprint_image" not in request.files:
+        return jsonify({"error": "File 'fingerprint_image' is required"}), 400
+    
+    # El template de referencia debe ser enviado como JSON string o cargado de DB
+    reference_template_str = request.form.get("reference_template")
+    if not reference_template_str:
+        return jsonify({"error": "Field 'reference_template' (JSON) is required"}), 400
+    
+    try:
+        reference_template = json.loads(reference_template_str)
+        image_bytes = request.files["fingerprint_image"].read()
+        
+        service = get_fingerprint_minutiae_service()
+        
+        # Procesar captura actual
+        skeleton = service.preprocess(image_bytes)
+        if skeleton is None:
+            return jsonify({"error": "Error al procesar la captura actual"}), 400
+            
+        current_minutiae = service.extract_minutiae(skeleton)
+        current_template = service.generate_iso_template(current_minutiae)
+        
+        # Calcular score
+        score = service.calculate_score(current_template, reference_template)
+        
+        # Umbral de aceptación (Threshold)
+        # Un score > 40 suele ser suficiente para sets de minucias bien extraídos
+        threshold = 45.0
+        verified = score >= threshold
+        
+        return jsonify({
+            "verified": verified,
+            "score": score,
+            "threshold": threshold,
+            "message": "Huella verificada" if verified else "Huella no coincide"
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error en verificación de minucias: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @biometrico_bp.route("/verify/full", methods=["POST"])
 def verify_full():

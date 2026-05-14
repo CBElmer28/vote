@@ -29,6 +29,8 @@ export default function Login({ isAdminLogin = false }) {
   const [identifier, setIdentifier] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [fingerprintPreview, setFingerprintPreview] = useState(null);
+  const [fingerprintFile, setFingerprintFile] = useState(null);
   const [step, setStep] = useState(1);
   const [photoUrl, setPhotoUrl] = useState(null);
 
@@ -80,40 +82,56 @@ export default function Login({ isAdminLogin = false }) {
   };
 
   // --- PASO 3: HUELLA (MODO DEMO) ---
+  const handleFingerprintFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFingerprintFile(file);
+      setError('');
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFingerprintPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleFingerprintAuth = async () => {
     setIsLoading(true);
     setError('');
 
     try {
-      // Temporizador para simular lectura en Modo Demo
-      setTimeout(async () => {
-        if (isAdminLogin) {
-          setStep(4); // Ahora el administrador va al paso de rostro
-          setIsLoading(false);
-        } else {
-          setIsLoading(false);
-          setStep(4); // Avanzar a Rostro para ciudadanos
-        }
-      }, 1500);
-
-      /* --- CÓDIGO REAL (Descomentar en producción) ---
-      const field = isAdminLogin ? 'email' : 'dni';
-      const optionsRes = await axios.post('http://localhost:80/api/biometrico/verify/fingerprint/options', { [field]: identifier });
-      const assertion = await startAuthentication(optionsRes.data.options);
-      const verifyRes = await axios.post('http://localhost:80/api/biometrico/verify/fingerprint/verify', {
-        [field]: identifier, credential_response: assertion
-      });
-      if (verifyRes.data.verified) {
-        if (isAdminLogin) {
-          const result = await login({ email: identifier });
-          if (result.success) navigate('/admin/dashboard');
-          else setError(result.error);
-        } else {
-          setStep(4);
-        }
+      if (!fingerprintFile) {
+        setError('Por favor, seleccione o capture una imagen de su huella.');
+        setIsLoading(false);
+        return;
       }
-      -------------------------------------------------- */
 
+      const field = isAdminLogin ? 'email' : 'dni';
+      const userRoute = isAdminLogin ? `by-email/${identifier}` : `by-dni/${identifier}`;
+      
+      // 1. Obtener el template de referencia del usuario
+      const userRes = await axios.get(`http://localhost:80/api/usuarios/${userRoute}`);
+      const referenceTemplate = userRes.data.data.fingerprint_template;
+
+      if (!referenceTemplate) {
+        setError('El usuario no tiene una huella registrada con el nuevo sistema.');
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Enviar imagen para verificación
+      const fingerData = new FormData();
+      fingerData.append('fingerprint_image', fingerprintFile);
+      fingerData.append('reference_template', JSON.stringify(referenceTemplate));
+
+      const verifyRes = await axios.post('http://localhost:80/api/biometrico/verify/fingerprint/minutiae', fingerData);
+
+      if (verifyRes.data.verified) {
+        setStep(4); // Avanzar a Rostro
+      } else {
+        setError(`Fallo de verificación: ${verifyRes.data.message} (Score: ${verifyRes.data.score.toFixed(1)})`);
+      }
+      setIsLoading(false);
     } catch (err) {
       setError('Error en huella dactilar: ' + (err.response?.data?.error || err.message));
       setIsLoading(false);
@@ -279,11 +297,37 @@ export default function Login({ isAdminLogin = false }) {
                 <h2 className="text-2xl font-black">{t('vote.finger_title')}</h2>
                 <p className="text-slate-500">{t('vote.finger_desc')}</p>
               </div>
-              <div className="w-full py-12 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50 flex flex-col items-center">
-                <Fingerprint size={60} className="text-blue-900/30 mb-4" />
-                <button onClick={handleFingerprintAuth} className="px-8 py-3 bg-blue-900 text-white rounded-xl font-bold flex items-center gap-2" disabled={isLoading}>
-                  {isLoading ? <Loader2 className="animate-spin" /> : t('vote.scan_finger')}
-                </button>
+              <div className="w-full py-12 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50 flex flex-col items-center relative overflow-hidden">
+                {isLoading ? (
+                  <div className="flex flex-col items-center animate-pulse py-4">
+                    <div className="relative w-24 h-24 mb-6">
+                      <Fingerprint size={96} className="text-blue-900 absolute inset-0 opacity-20" />
+                      <div className="absolute top-0 left-0 w-full h-1 bg-blue-900 shadow-[0_0_15px_#1e3a8a] animate-scan" />
+                      <Fingerprint size={96} className="text-blue-900 absolute inset-0 animate-pulse" />
+                    </div>
+                    <p className="text-blue-900 font-black text-lg tracking-widest animate-bounce">
+                      VALIDANDO HUELLA...
+                    </p>
+                    <p className="text-slate-400 text-[10px] mt-2 uppercase tracking-[0.3em]">
+                      Comparando minucias ISO/IEC 19794-2
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <Fingerprint size={60} className={`text-blue-900/30 mb-4 ${fingerprintFile ? 'text-blue-900/60 animate-pulse' : ''}`} />
+                    <input type="file" id="f-up-finger-login" accept="image/*" className="hidden" onChange={handleFingerprintFileChange} />
+                    <label htmlFor="f-up-finger-login" className="px-8 py-3 bg-blue-900 text-white rounded-xl font-bold flex items-center gap-2 cursor-pointer mb-4 hover:scale-105 transition-transform active:scale-95 shadow-lg shadow-blue-900/20">
+                      <Upload size={18} /> {fingerprintFile ? fingerprintFile.name : t('admin.select_file')}
+                    </label>
+                    <button 
+                      onClick={handleFingerprintAuth} 
+                      className={`px-8 py-3 border-2 border-blue-900 text-blue-900 rounded-xl font-bold flex items-center gap-2 transition-all ${!fingerprintFile ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-900 hover:text-white'}`} 
+                      disabled={isLoading || !fingerprintFile}
+                    >
+                      {t('login.validate_fingerprint')}
+                    </button>
+                  </>
+                )}
               </div>
               <div className="flex w-full">
                 <button className="text-sm font-bold text-slate-400 mx-auto" onClick={() => setStep(isAdminLogin ? 1 : 2)}>{t('vote.back')}</button>

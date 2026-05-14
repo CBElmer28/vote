@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS users (
     aws_face_id         VARCHAR(255)  UNIQUE COMMENT 'FaceId returned by AWS Rekognition Collection',
     webauthn_credential_id VARCHAR(255) UNIQUE COMMENT 'FIDO2 Credential ID for Fingerprint/FaceID',
     webauthn_public_key TEXT          COMMENT 'FIDO2 Public Key to verify device signatures',
+    fingerprint_template JSON         COMMENT 'Minutiae template ISO/IEC 19794-2',
     
     is_active           BOOLEAN       NOT NULL DEFAULT TRUE,
     role_id             INT           NOT NULL,

@@ -186,8 +186,8 @@
     "submit": "Qillqayta Tukuy",
     "fingerprint_registration_title": "Ruk'ana marka Qillqay",
     "fingerprint_registration_subtitle": "Ruk'ana qhawaqta allichay qillqanapaq",
-    "webauthn_module": "WebAuthn Amachay Módulo",
-    "fingerprint_instruction": "Ruk'ana mañakusqa kanqa \"Qillqayta Tukuy\" ñitiyta ñitiptiyki."
+    "webauthn_module": "Biometría Amachay Módulo",
+    "fingerprint_instruction": "Ruk'ana markata akllay icha qhaway qillqanapaq."
   },
   "accessibility": {
     "title": "Accesibilidad",
