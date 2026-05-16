@@ -4,6 +4,7 @@ from flask import Blueprint, request, jsonify, current_app
 from webauthn.helpers import options_to_json
 import json
 from app.services.face_service import get_face_service
+from app.utils.file_security_utils import validate_and_sanitize_image
 from app.services.fingerprint_service import get_fingerprint_service
 from app.services.fingerprint_minutiae_service import get_fingerprint_minutiae_service
 
@@ -24,8 +25,12 @@ def register_face():
         return jsonify({"error": "File 'face_photo' is required"}), 400
 
     face_bytes = request.files["face_photo"].read()
+    sanitized_face = validate_and_sanitize_image(face_bytes)
+    if not sanitized_face:
+        return jsonify({"error": "Invalid or unsafe image file"}), 400
+    
     try:
-        face_id = get_face_service().register_face(face_bytes)
+        face_id = get_face_service().register_face(sanitized_face)
         if not face_id:
             return jsonify({"error": "No se detectó un rostro válido para registrar"}), 400
             
@@ -45,9 +50,13 @@ def verify_face():
         return jsonify({"error": "Field 'reference_face_id' is required"}), 400
 
     face_bytes = request.files["face_photo"].read()
+    sanitized_face = validate_and_sanitize_image(face_bytes)
+    if not sanitized_face:
+        return jsonify({"error": "Invalid or unsafe image file"}), 400
+    
     try:
         # PASAMOS EL ID AL SERVICIO
-        result = get_face_service().verify(face_bytes, reference_face_id)
+        result = get_face_service().verify(sanitized_face, reference_face_id)
         return jsonify(result), 200
     except Exception as e:
         return jsonify({"error": "Face verification failed", "detail": str(e)}), 500
@@ -188,9 +197,13 @@ def register_fingerprint_minutiae():
         return jsonify({"error": "File 'fingerprint_image' is required"}), 400
 
     image_bytes = request.files["fingerprint_image"].read()
+    sanitized_image = validate_and_sanitize_image(image_bytes)
+    if not sanitized_image:
+        return jsonify({"error": "Invalid or unsafe fingerprint image"}), 400
+        
     service = get_fingerprint_minutiae_service()
     
-    skeleton = service.preprocess(image_bytes)
+    skeleton = service.preprocess(sanitized_image)
     if skeleton is None:
         return jsonify({"error": "Error al procesar la imagen de la huella"}), 400
         
@@ -218,11 +231,14 @@ def verify_fingerprint_minutiae():
     try:
         reference_template = json.loads(reference_template_str)
         image_bytes = request.files["fingerprint_image"].read()
-        
+        sanitized_image = validate_and_sanitize_image(image_bytes)
+        if not sanitized_image:
+            return jsonify({"error": "Invalid or unsafe fingerprint image"}), 400
+            
         service = get_fingerprint_minutiae_service()
         
         # Procesar captura actual
-        skeleton = service.preprocess(image_bytes)
+        skeleton = service.preprocess(sanitized_image)
         if skeleton is None:
             return jsonify({"error": "Error al procesar la captura actual"}), 400
             

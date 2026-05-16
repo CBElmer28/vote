@@ -5,6 +5,11 @@ class Config:
     """Configuración base."""
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+        "connect_args": {"connect_timeout": 2}
+    }
 
     # Construye la URL de conexión MySQL con PyMySQL
     DB_USER = os.getenv("DB_USER", "voteuser")

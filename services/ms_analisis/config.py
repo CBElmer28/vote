@@ -4,6 +4,10 @@ import os
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-analisis")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+    }
     DEBUG = os.getenv("FLASK_DEBUG", "0") == "1"
 
     DB_USER = os.getenv("DB_USER", "voteuser")

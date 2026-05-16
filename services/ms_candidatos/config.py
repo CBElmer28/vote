@@ -4,6 +4,10 @@ import os
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-candidatos")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+    }
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024 # 16MB
     DEBUG = os.getenv("FLASK_DEBUG", "0") == "1"
 

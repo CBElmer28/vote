@@ -1,5 +1,6 @@
 from app.repositories.candidate_repository import CandidateRepository
 from app.utils.image_handler import ImageHandler
+from app.utils.security_utils import sanitize_input
 
 
 class CandidateService:
@@ -45,6 +46,7 @@ class CandidateService:
     #  Mutations
     # ------------------------------------------------------------------ #
     def create_candidate(self, data: dict):
+        data = sanitize_input(data)
         if not data.get("full_name"):
             return None, "Field 'full_name' is required"
 
@@ -64,6 +66,7 @@ class CandidateService:
         return candidate.to_dict(), None
 
     def update_candidate(self, candidate_id: int, data: dict):
+        data = sanitize_input(data)
         candidate = self.repo.get_by_id(candidate_id)
         if not candidate:
             return None, "Candidate not found"
