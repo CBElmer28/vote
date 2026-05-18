@@ -196,11 +196,67 @@ services:
     networks:
       - votenet
 
+  # ----------------------------------------------------------
+  # n8n DATABASE — PostgreSQL 15 (puerto 5432 interno)
+  # ----------------------------------------------------------
+  n8n_db:
+    image: postgres:15-alpine
+    container_name: n8n_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: n8n_database
+      POSTGRES_USER: n8n_admin
+      POSTGRES_PASSWORD: ${N8N_DB_PASSWORD:-n8nsecurepassword}
+    volumes:
+      - n8n_db_data:/var/lib/postgresql/data
+    networks:
+      - votenet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n_admin -d n8n_database"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------
+  # n8n SERVER — Workflow automation (puerto 5678)
+  # ----------------------------------------------------------
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n_server
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=n8n_db
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n_database
+      - DB_POSTGRESDB_USER=n8n_admin
+      - DB_POSTGRESDB_PASSWORD=${N8N_DB_PASSWORD:-n8nsecurepassword}
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      - GENERIC_TIMEZONE=America/Lima
+      - TZ=America/Lima
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - votenet
+    depends_on:
+      n8n_db:
+        condition: service_healthy
+
 # ============================================================
 #  VOLÚMENES
 # ============================================================
 volumes:
   db_data:
+    driver: local
+  n8n_db_data:
+    driver: local
+  n8n_data:
     driver: local
 
 # ============================================================
