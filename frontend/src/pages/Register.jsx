@@ -37,6 +37,8 @@ export default function Register({ inDashboard = false }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [fingerprintPreview, setFingerprintPreview] = useState(null);
+  const [fingerprintFile, setFingerprintFile] = useState(null);
   const [photoUrl, setPhotoUrl] = useState(null);
   const webcamRef = useRef(null);
   const navigate = useNavigate();
@@ -139,37 +141,28 @@ export default function Register({ inDashboard = false }) {
         awsFaceId = faceRes.data.aws_face_id;
       }
 
-      // 2. Registrar Huella Real (WebAuthn)
-      let webauthnData = { credential_id: null, public_key: null };
-      
-      try {
-        const optionsRes = await axios.post('/api/biometrico/register/fingerprint/options', { 
-          user_id: formData.dni, // Usamos DNI como ID temporal para el challenge
-          user_name: formData.first_name 
-        });
-        
-        const credential = await startRegistration(optionsRes.data.options);
-        
-        const webauthnRes = await axios.post('/api/biometrico/register/fingerprint/verify', {
-          user_id: formData.dni,
-          credential_response: credential
-        });
-        
-        webauthnData = { 
-          credential_id: webauthnRes.data.credential_id, 
-          public_key: webauthnRes.data.public_key 
-        };
-      } catch (fErr) {
-        console.error("Error en registro de huella:", fErr);
-        throw new Error("No se pudo completar el registro de huella dactilar. Asegúrese de usar un dispositivo compatible.");
+      // 2. Registrar Huella por Minucias (ISO/IEC 19794-2)
+      let fingerprintTemplate = null;
+      if (fingerprintFile) {
+        try {
+          const fingerFormData = new FormData();
+          fingerFormData.append('fingerprint_image', fingerprintFile);
+          
+          const fingerRes = await axios.post('/api/biometrico/register/fingerprint/minutiae', fingerFormData);
+          fingerprintTemplate = fingerRes.data.iso_template;
+        } catch (fErr) {
+          console.error("Error en registro de huella:", fErr);
+          throw new Error("No se pudo procesar la imagen de la huella. Asegúrese de que sea nítida.");
+        }
+      } else {
+        throw new Error("La huella dactilar es obligatoria.");
       }
 
       // 3. Guardar el Usuario final
       const finalUserData = {
         ...formData,
         aws_face_id: awsFaceId,
-        webauthn_credential_id: webauthnData.credential_id,
-        webauthn_public_key: webauthnData.public_key
+        fingerprint_template: fingerprintTemplate
       };
 
       await axios.post('/api/usuarios/', finalUserData);
@@ -452,14 +445,47 @@ export default function Register({ inDashboard = false }) {
                   <h2 className="text-2xl font-black text-[#1e3a8a]">{t('register.fingerprint_registration_title')}</h2>
                   <p className="text-slate-500 text-sm">{t('register.fingerprint_registration_subtitle')}</p>
                 </div>
-                <div className="w-full py-12 border-2 border-dashed border-slate-200 rounded-[2.5rem] bg-slate-50 flex flex-col items-center">
-                  <FingerIcon size={64} className={`mb-4 transition-all ${step === 5 ? 'text-[#1e3a8a] animate-pulse' : 'text-slate-200'}`} />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">
-                    {t('register.webauthn_module')}
-                  </p>
-                  <div className="px-10 py-6 bg-blue-50 text-[#1e3a8a] rounded-3xl font-bold text-sm border border-blue-100 mb-2 max-w-md mx-auto leading-relaxed">
-                    {t('register.fingerprint_instruction')}
-                  </div>
+                <div className="w-full py-12 border-2 border-dashed border-slate-200 rounded-[2.5rem] bg-slate-50 flex flex-col items-center relative overflow-hidden">
+                  {isLoading ? (
+                    <div className="flex flex-col items-center animate-pulse py-4">
+                      <div className="relative w-24 h-24 mb-6">
+                        <FingerIcon size={96} className="text-[#1e3a8a] absolute inset-0 opacity-20" />
+                        <div className="absolute top-0 left-0 w-full h-1 bg-[#1e3a8a] shadow-[0_0_15px_#1e3a8a] animate-scan" />
+                        <FingerIcon size={96} className="text-[#1e3a8a] absolute inset-0 animate-pulse" />
+                      </div>
+                      <p className="text-[#1e3a8a] font-black text-lg tracking-widest animate-bounce">
+                        PROCESANDO HUELLA...
+                      </p>
+                      <p className="text-slate-400 text-[10px] mt-2 uppercase tracking-[0.3em]">
+                        Extrayendo minucias ISO/IEC 19794-2
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <FingerIcon size={64} className={`mb-4 transition-all ${fingerprintFile ? 'text-[#1e3a8a] animate-pulse' : 'text-slate-200'}`} />
+                      
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">
+                        MÓDULO DE MINUCIAS ISO/IEC 19794-2
+                      </p>
+                      
+                      <input 
+                        type="file" 
+                        id="f-up-finger-reg" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            setFingerprintFile(file);
+                          }
+                        }}
+                      />
+                      <label htmlFor="f-up-finger-reg" className="px-10 py-6 bg-blue-50 text-[#1e3a8a] rounded-3xl font-bold text-sm border border-blue-100 mb-2 max-w-md mx-auto leading-relaxed cursor-pointer hover:bg-blue-100 transition-all shadow-md">
+                        {fingerprintFile ? fingerprintFile.name : t('register.fingerprint_instruction')}
+                      </label>
+                      <p className="text-xs text-slate-400 mt-2">Formatos permitidos: JPG, PNG, BMP, TIF (FVC2002/2004)</p>
+                    </>
+                  )}
                 </div>
               </div>
             )}

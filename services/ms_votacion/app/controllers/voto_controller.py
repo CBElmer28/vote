@@ -1,5 +1,8 @@
 from flask import Blueprint, request, jsonify
 from app.services.voto_service import VoteService
+from app.utils.jwt_utils import require_token
+from app import limiter
+from app.utils.security_logger import log_security_event
 
 voto_bp = Blueprint("votes", __name__)
 service = VoteService()
@@ -11,43 +14,53 @@ def health():
 
 
 @voto_bp.route("/", methods=["POST"])
-def cast_vote():
+@require_token
+@limiter.limit("1 per minute", error_message="You can only vote once per minute")
+def cast_vote(token_payload):
     """
-    POST /api/votos/
-    Registers a vote after passing face + fingerprint verification.
-
-    Form-data fields:
-        user_id            — ID of the voter
-        candidate_id       — ID of the chosen candidate
-        reference_url      — URL of the voter's stored reference photo
-        stored_hash        — Voter's stored fingerprint hash
-        face_photo         — image file (current face scan)
-        fingerprint_sample — raw fingerprint bytes from scanner
+    Registers a vote. 
+    Can accept JSON or Form-data.
+    Identity is verified via JWT (token_payload['sub']).
+    Biometrics are optional in this endpoint (validated at login).
     """
-    # ── Validate required text fields ──────────────────────────────────────
-    required_fields = ["user_id", "candidate_id", "reference_url", "stored_hash"]
-    missing = [f for f in required_fields if not request.form.get(f)]
-    if missing:
-        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+    if request.is_json:
+        data = request.get_json()
+    else:
+        data = request.form
 
-    required_files = ["face_photo", "fingerprint_sample"]
-    missing_files = [f for f in required_files if f not in request.files]
-    if missing_files:
-        return jsonify({"error": f"Missing files: {', '.join(missing_files)}"}), 400
+    # ── User identity from JWT (Secure) ────────────────────────────────────
+    user_id = token_payload.get("sub")
+    candidate_id = data.get("candidate_id")
+
+    if not candidate_id:
+        return jsonify({"error": "Missing candidate_id"}), 400
+
+    # ── Biometrics (Optional) ──────────────────────────────────────────────
+    # If provided (form-data), we use them. If not, we pass None.
+    face_photo = request.files.get("face_photo")
+    fingerprint_sample = request.files.get("fingerprint_sample")
+    
+    face_bytes = face_photo.read() if face_photo else None
+    fingerprint_bytes = fingerprint_sample.read() if fingerprint_sample else None
+    
+    reference_url = data.get("reference_url")
+    stored_hash = data.get("stored_hash")
 
     vote, error = service.cast_vote(
-        user_id           = int(request.form["user_id"]),
-        candidate_id      = int(request.form["candidate_id"]),
-        face_bytes        = request.files["face_photo"].read(),
-        reference_url     = request.form["reference_url"],
-        fingerprint_bytes = request.files["fingerprint_sample"].read(),
-        stored_hash       = request.form["stored_hash"],
+        user_id           = int(user_id),
+        candidate_id      = int(candidate_id),
+        face_bytes        = face_bytes,
+        reference_url     = reference_url,
+        fingerprint_bytes = fingerprint_bytes,
+        stored_hash       = stored_hash,
         ip_address        = request.remote_addr,
     )
 
     if error:
-        return jsonify({"error": error}), 422
+        log_security_event("VOTE_FAILED", f"User {user_id} failed to vote: {error}", level="WARNING")
+        return jsonify({"error": error}), 400
 
+    log_security_event("VOTE_SUCCESS", f"User {user_id} successfully cast their vote")
     return jsonify({"message": "Voto registrado con éxito", "data": vote}), 201
 
 

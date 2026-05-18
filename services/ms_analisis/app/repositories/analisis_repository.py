@@ -1,11 +1,13 @@
 from app import db
 from sqlalchemy import text
+from app.utils.security_utils import sanitize_input
 
 
 class AnalysisRepository:
     """Read-only data access for vote analysis."""
 
     def _build_where_clause(self, **filters):
+        filters = sanitize_input(filters)
         base_where = []
         params = {}
         
