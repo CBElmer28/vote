@@ -1,0 +1,151 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: n8n-db-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-db
+  namespace: default
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: n8n-db
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n-db
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n-db
+  template:
+    metadata:
+      labels:
+        app: n8n-db
+    spec:
+      containers:
+        - name: n8n-db
+          image: postgres:15-alpine
+          env:
+            - name: POSTGRES_DB
+              value: n8n_database
+            - name: POSTGRES_USER
+              value: n8n_admin
+            - name: POSTGRES_PASSWORD
+              value: n8nsecurepassword
+          ports:
+            - containerPort: 5432
+              name: postgres
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "n8n_admin", "-d", "n8n_database"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "n8n_admin", "-d", "n8n_database"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: db-data
+          persistentVolumeClaim:
+            claimName: n8n-db-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: n8n-data-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n
+  template:
+    metadata:
+      labels:
+        app: n8n
+    spec:
+      containers:
+        - name: n8n
+          image: docker.n8n.io/n8nio/n8n:latest
+          env:
+            - name: DB_TYPE
+              value: postgresdb
+            - name: DB_POSTGRESDB_HOST
+              value: n8n-db
+            - name: DB_POSTGRESDB_PORT
+              value: "5432"
+            - name: DB_POSTGRESDB_DATABASE
+              value: n8n_database
+            - name: DB_POSTGRESDB_USER
+              value: n8n_admin
+            - name: DB_POSTGRESDB_PASSWORD
+              value: n8nsecurepassword
+            - name: N8N_HOST
+              value: localhost
+            - name: N8N_PORT
+              value: "5678"
+            - name: N8N_PROTOCOL
+              value: http
+            - name: WEBHOOK_URL
+              value: http://localhost:5678/
+            - name: GENERIC_TIMEZONE
+              value: America/Lima
+            - name: TZ
+              value: America/Lima
+            - name: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS
+              value: "true"
+          ports:
+            - containerPort: 5678
+              name: http
+          volumeMounts:
+            - name: n8n-data
+              mountPath: /home/node/.n8n
+      volumes:
+        - name: n8n-data
+          persistentVolumeClaim:
+            claimName: n8n-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-service
+  namespace: default
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 5678
+      targetPort: 5678
+      protocol: TCP
+  selector:
+    app: n8n

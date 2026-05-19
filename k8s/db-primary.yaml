@@ -1,0 +1,191 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-primary-config
+  namespace: default
+data:
+  primary.cnf: |
+    [mysqld]
+    server-id=1
+    log-bin=mysql-bin
+    binlog_format=row
+    gtid_mode=ON
+    enforce_gtid_consistency=ON
+    log-slave-updates=ON
+    plugin-load-add=semisync_master.so
+    plugin-load-add=mysql_clone.so
+    rpl_semi_sync_master_enabled=1
+    rpl_semi_sync_master_timeout=1000
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-init-schema-config
+  namespace: default
+data:
+  01_schema.sql: |
+    CREATE DATABASE IF NOT EXISTS votesystem CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    USE votesystem;
+
+    CREATE TABLE IF NOT EXISTS roles (
+        id              INT           AUTO_INCREMENT PRIMARY KEY,
+        name            VARCHAR(50)   NOT NULL UNIQUE,
+        description     VARCHAR(255)
+    ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS users (
+        id                  INT           AUTO_INCREMENT PRIMARY KEY,
+        first_name          VARCHAR(100)  NOT NULL,
+        paternal_last_name  VARCHAR(100)  NOT NULL,
+        maternal_last_name  VARCHAR(100)  NOT NULL,
+        dob                 DATE          NOT NULL,
+        dni                 CHAR(8)       NOT NULL UNIQUE,
+        email               VARCHAR(150)  UNIQUE,
+        phone               VARCHAR(20),
+        country_residence   VARCHAR(100)  NOT NULL DEFAULT 'Perú',
+        department_id       VARCHAR(2),
+        province_id         VARCHAR(4),
+        district_id         VARCHAR(6),
+        address             VARCHAR(255),
+        photo_url           VARCHAR(255),
+        aws_face_id         VARCHAR(255)  UNIQUE,
+        webauthn_credential_id VARCHAR(255) UNIQUE,
+        webauthn_public_key TEXT,
+        fingerprint_template JSON,
+        is_active           BOOLEAN       NOT NULL DEFAULT TRUE,
+        role_id             INT           NOT NULL,
+        created_at          DATETIME      DEFAULT CURRENT_TIMESTAMP,
+        updated_at          DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_dni (dni),
+        FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE RESTRICT
+    ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS candidates (
+        id          INT          AUTO_INCREMENT PRIMARY KEY,
+        full_name   VARCHAR(100) NOT NULL,
+        party       VARCHAR(100),
+        photo_url   VARCHAR(255),
+        party_symbol_url VARCHAR(255),
+        members     JSON,
+        description TEXT,
+        is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
+        created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP,
+        updated_at  DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS votes (
+        id                      INT     AUTO_INCREMENT PRIMARY KEY,
+        user_id                 INT     NOT NULL,
+        candidate_id            INT     NOT NULL,
+        face_confidence         FLOAT,
+        fingerprint_confidence  FLOAT,
+        face_verified           BOOLEAN NOT NULL DEFAULT FALSE,
+        fingerprint_verified    BOOLEAN NOT NULL DEFAULT FALSE,
+        ip_address              VARCHAR(45),
+        voted_at                DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user      (user_id),
+        INDEX idx_candidate (candidate_id),
+        UNIQUE KEY uq_one_vote_per_user (user_id)
+    ) ENGINE=InnoDB;
+
+    INSERT IGNORE INTO candidates (full_name, party) VALUES
+        ('Ana García',    'Partido Progresista'),
+        ('Luis Morales',  'Partido Nacional'),
+        ('Sara Jiménez',  'Partido Verde');
+
+    INSERT IGNORE INTO roles (id, name, description) VALUES 
+        (1, 'ADMIN', 'Administrator full access'),
+        (2, 'VOTER', 'Standard voter');
+
+    INSERT IGNORE INTO users (first_name, paternal_last_name, maternal_last_name, dob, dni, email, role_id) VALUES 
+        ('Admin', 'System', 'Root', '1980-01-01', '00000000', 'admin@votesystem.local', 1),
+        ('Test', 'User', 'Demo', '1990-01-01', '11111111', 'test@votesystem.local', 2);
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-primary-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-primary
+  namespace: default
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: mysql-primary
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-primary
+  namespace: default
+spec:
+  serviceName: mysql-primary
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-primary
+  template:
+    metadata:
+      labels:
+        app: mysql-primary
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          args:
+            - "--default-authentication-plugin=mysql_native_password"
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secrets
+                  key: mysql-root-password
+            - name: MYSQL_DATABASE
+              value: votesystem
+            - name: MYSQL_USER
+              value: voteuser
+            - name: MYSQL_PASSWORD
+              value: votepassword
+          ports:
+            - containerPort: 3306
+              name: mysql
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+            - name: mysql-config
+              mountPath: /etc/mysql/conf.d
+            - name: mysql-init
+              mountPath: /docker-entrypoint-initdb.d
+          livenessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 5
+      volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: mysql-primary-pvc
+        - name: mysql-config
+          configMap:
+            name: mysql-primary-config
+        - name: mysql-init
+          configMap:
+            name: mysql-init-schema-config
