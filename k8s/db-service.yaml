@@ -6,8 +6,5 @@ metadata:
   labels:
     app: votesystem-db
 spec:
-  ports:
-    - port: 3306
-      targetPort: 3306
-  selector:
-    app: mysql-primary
+  type: ExternalName
+  externalName: votesystem-db-haproxy.prod-db.svc.cluster.local

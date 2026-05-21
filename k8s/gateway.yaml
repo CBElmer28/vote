@@ -37,9 +37,9 @@ data:
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
 
-            proxy_connect_timeout 2s;
-            proxy_send_timeout 2s;
-            proxy_read_timeout 2s;
+            proxy_connect_timeout 15s;
+            proxy_send_timeout 15s;
+            proxy_read_timeout 15s;
 
             # MS Usuarios
             location /api/usuarios {

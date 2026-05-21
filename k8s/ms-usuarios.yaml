@@ -6,7 +6,7 @@ metadata:
   labels:
     app: ms-usuarios
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: ms-usuarios
@@ -26,7 +26,7 @@ spec:
             - name: FLASK_ENV
               value: development
             - name: FLASK_DEBUG
-              value: "1"
+              value: "0"
             - name: DB_HOST
               value: votesystem-db
             - name: DB_PORT
