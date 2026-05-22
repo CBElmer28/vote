@@ -57,9 +57,12 @@ kind: Service
 metadata:
   name: ms-candidatos
   namespace: default
+  labels:
+    app: ms-candidatos
 spec:
   ports:
-    - port: 5005
+    - name: http
+      port: 5005
       targetPort: 5005
       protocol: TCP
   selector:

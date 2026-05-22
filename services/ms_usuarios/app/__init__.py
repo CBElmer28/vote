@@ -2,6 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from config import get_config
+from prometheus_flask_exporter import PrometheusMetrics
 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -16,6 +17,7 @@ limiter = Limiter(
 
 def create_app(test_config=None):
     app = Flask(__name__)
+    metrics = PrometheusMetrics(app)
     if test_config:
         app.config.update(test_config)
     else:

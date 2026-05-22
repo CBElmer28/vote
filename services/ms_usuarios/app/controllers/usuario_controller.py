@@ -8,6 +8,7 @@ from app.utils.security_logger import log_security_event
 
 
 @usuario_bp.route("/health", methods=["GET"])
+@limiter.exempt
 def health():
     return jsonify({"status": "ok", "service": "ms_usuarios", "port": 5001}), 200
 

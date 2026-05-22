@@ -65,9 +65,12 @@ kind: Service
 metadata:
   name: ms-biometrico
   namespace: default
+  labels:
+    app: ms-biometrico
 spec:
   ports:
-    - port: 5002
+    - name: http
+      port: 5002
       targetPort: 5002
       protocol: TCP
   selector:

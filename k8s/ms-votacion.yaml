@@ -59,9 +59,12 @@ kind: Service
 metadata:
   name: ms-votacion
   namespace: default
+  labels:
+    app: ms-votacion
 spec:
   ports:
-    - port: 5003
+    - name: http
+      port: 5003
       targetPort: 5003
       protocol: TCP
   selector:

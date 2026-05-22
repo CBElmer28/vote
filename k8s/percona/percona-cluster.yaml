@@ -20,6 +20,24 @@ spec:
     size: 3
     image: percona/percona-xtradb-cluster:8.0.32-24.2
     
+    # Exporter sidecar container to expose MySQL metrics for Prometheus
+    sidecars:
+      - name: mysqld-exporter
+        image: prom/mysqld-exporter:v0.15.0
+        env:
+          - name: MYSQLD_EXPORTER_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mysql-secrets
+                key: root
+        args:
+          - "--mysqld.username=root"
+          - "--mysqld.address=127.0.0.1:3306"
+        ports:
+          - name: metrics
+            containerPort: 9104
+            protocol: TCP
+    
     # Recursos para nodos de base de datos
     resources:
       requests:
