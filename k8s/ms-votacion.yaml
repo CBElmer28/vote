@@ -38,7 +38,7 @@ spec:
             - name: DB_PASSWORD
               value: votepassword
             - name: SECRET_KEY
-              value: dev-secret-votacion
+              value: dev-secret-usuarios
             - name: BIOMETRICO_URL
               value: http://ms-biometrico:5002
           livenessProbe:

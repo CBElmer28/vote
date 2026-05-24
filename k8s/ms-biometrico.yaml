@@ -26,7 +26,7 @@ spec:
             - name: FLASK_ENV
               value: development
             - name: FLASK_DEBUG
-              value: "1"
+              value: "0"
             - name: BIOMETRIC_MODE
               value: mock
             - name: AZURE_FACE_API_KEY
