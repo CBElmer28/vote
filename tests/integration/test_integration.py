@@ -167,7 +167,7 @@ class TestAuthenticationFlow:
 
     def test_invalid_login_rejected(self):
         """Verify login fails for a non-existent DNI."""
-        res = requests.post(f"{USERS_URL}/auth/login", json={"dni": "00000000"})
+        res = requests.post(f"{USERS_URL}/auth/login", json={"dni": "99999999"})
         assert res.status_code == 401
         assert "error" in res.json()
 
@@ -244,11 +244,18 @@ class TestVotingFlow:
         """Verify a user cannot vote twice."""
         headers = {"Authorization": f"Bearer {auth_token}"}
         payload = {"candidate_id": candidate["id"]}
-        # First attempt (may have already been cast above)
-        requests.post(f"{VOTE_URL}/", json=payload, headers=headers)
-        # Second attempt must fail
-        res = requests.post(f"{VOTE_URL}/", json=payload, headers=headers)
-        assert res.status_code in [400, 429]  # 400=already voted, 429=rate limited
+        
+        # Ensure at least one vote has been registered (either 201 or 400 if already cast)
+        # We try multiple times in case of rate limiting (429) due to load balancing across pods
+        for _ in range(5):
+            res1 = requests.post(f"{VOTE_URL}/", json=payload, headers=headers)
+            if res1.status_code in [201, 400]:
+                break
+            time.sleep(0.5)
+            
+        # Subsequent attempt must always fail (either 400 already voted or 429 rate limited)
+        res2 = requests.post(f"{VOTE_URL}/", json=payload, headers=headers)
+        assert res2.status_code in [400, 429]  # 400=already voted, 429=rate limited
 
 
 class TestSecurityFlow:

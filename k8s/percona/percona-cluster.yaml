@@ -1,0 +1,81 @@
+apiVersion: pxc.percona.com/v1
+kind: PerconaXtraDBCluster
+metadata:
+  name: votesystem-db
+  namespace: prod-db
+spec:
+  crVersion: 1.19.1
+  secretsName: mysql-secrets # Reutiliza el mismo nombre del Secret
+  
+  # TLS / SSL (Fácil integración con cert-manager)
+  # Para propósitos de demostración o migración rápida, desactivado.
+  # En producción real, se recomienda activarlo.
+  unsafeFlags:
+    tls: true
+  tls:
+    enabled: false
+
+  # Percona XtraDB Cluster (MySQL + Galera Replication)
+  pxc:
+    size: 3
+    image: percona/percona-xtradb-cluster:8.0.32-24.2
+    
+    # Exporter sidecar container to expose MySQL metrics for Prometheus
+    sidecars:
+      - name: mysqld-exporter
+        image: prom/mysqld-exporter:v0.15.0
+        env:
+          - name: MYSQLD_EXPORTER_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mysql-secrets
+                key: root
+        args:
+          - "--mysqld.username=root"
+          - "--mysqld.address=127.0.0.1:3306"
+        ports:
+          - name: metrics
+            containerPort: 9104
+            protocol: TCP
+    
+    # Recursos para nodos de base de datos
+    resources:
+      requests:
+        cpu: "300m"
+        memory: "512Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+
+    # Almacenamiento persistente para cada nodo del clúster
+    volumeSpec:
+      persistentVolumeClaim:
+        resources:
+          requests:
+            storage: 10Gi
+            
+    # Habilitar anti-afinidad para asegurar que los pods corran en nodos físicos diferentes
+    affinity:
+      antiAffinityTopologyKey: kubernetes.io/hostname
+
+  # HAProxy Load Balancer
+  haproxy:
+    enabled: true
+    size: 2 # 2 instancias de proxy para alta disponibilidad del balanceador
+    image: percona/haproxy:2.8.17
+    
+    # Recursos del proxy
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+        
+    affinity:
+      antiAffinityTopologyKey: kubernetes.io/hostname
+    readinessProbes:
+      initialDelaySeconds: 15
+      timeoutSeconds: 5
+      periodSeconds: 5

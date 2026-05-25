@@ -1,0 +1,387 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: failover-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: service-patcher
+  namespace: default
+rules:
+  - apiGroups: [""]
+    resources: ["services", "pods"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: failover-rb
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: failover-sa
+    namespace: default
+roleRef:
+  kind: Role
+  name: service-patcher
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: failover-script-config
+  namespace: default
+data:
+  failover.py: |
+    import time
+    import os
+    import sys
+    import pymysql
+    from kubernetes import client, config
+
+    PRIMARY_HOST = os.getenv("PRIMARY_HOST", "mysql-primary")
+    SECONDARY_HOST = os.getenv("SECONDARY_HOST", "mysql-secondary")
+    DB_USER = os.getenv("DB_USER", "root")
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "rootpassword")
+    SERVICE_NAME = os.getenv("SERVICE_NAME", "votesystem-db")
+    NAMESPACE = os.getenv("NAMESPACE", "default")
+    REPL_USER = os.getenv("REPL_USER", "repl")
+    REPL_PASS = os.getenv("REPL_PASS", "replpassword")
+
+    def get_db_connection(host):
+        return pymysql.connect(
+            host=host,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            connect_timeout=3
+        )
+
+    def get_current_master():
+        try:
+            config.load_incluster_config()
+            v1 = client.CoreV1Api()
+            srv = v1.read_namespaced_service(SERVICE_NAME, NAMESPACE)
+            app = srv.spec.selector.get("app")
+            return app
+        except Exception as e:
+            print(f"[MONITOR] [ERROR] Failed to get service selector: {e}", flush=True)
+            return None
+
+    def redirect_service(new_master_app):
+        try:
+            config.load_incluster_config()
+            v1 = client.CoreV1Api()
+            body = {
+                "spec": {
+                    "selector": {
+                        "app": new_master_app
+                    }
+                }
+            }
+            v1.patch_namespaced_service(SERVICE_NAME, NAMESPACE, body)
+            print(f"[FAILOVER] Service '{SERVICE_NAME}' successfully redirected to {new_master_app}!", flush=True)
+            return True
+        except Exception as e:
+            print(f"[FAILOVER] [CRITICAL] Failed to patch Kubernetes service: {e}", flush=True)
+            return False
+
+    def fence_master(master_app):
+        print(f"[FENCING] Fencing active: Scaling down StatefulSet {master_app} to 0...", flush=True)
+        try:
+            config.load_incluster_config()
+            apps_v1 = client.AppsV1Api()
+            body = {"spec": {"replicas": 0}}
+            apps_v1.patch_namespaced_stateful_set(master_app, NAMESPACE, body)
+            print(f"[FENCING] Successfully scaled down {master_app}. Waiting for pod termination...", flush=True)
+            
+            # Wait for the pod to be deleted
+            core_v1 = client.CoreV1Api()
+            pod_name = f"{master_app}-0"
+            for i in range(20):
+                try:
+                    core_v1.read_namespaced_pod(pod_name, NAMESPACE)
+                    time.sleep(2)
+                except client.exceptions.ApiException as e:
+                    if e.status == 404:
+                        print(f"[FENCING] Pod {pod_name} terminated successfully.", flush=True)
+                        return True
+                    if e.status != 200:
+                        raise e
+            print(f"[FENCING] [WARNING] Timeout waiting for {pod_name} to terminate. Proceeding...", flush=True)
+            return True
+        except Exception as e:
+            print(f"[FENCING] [CRITICAL] Failed to fence {master_app}: {e}", flush=True)
+            return False
+
+    def scale_up_statefulset(app_name):
+        print(f"[RECOVERY] Scaling up StatefulSet {app_name} back to 1 replica to restore HA...", flush=True)
+        try:
+            config.load_incluster_config()
+            apps_v1 = client.AppsV1Api()
+            body = {"spec": {"replicas": 1}}
+            apps_v1.patch_namespaced_stateful_set(app_name, NAMESPACE, body)
+            print(f"[RECOVERY] Successfully scaled up {app_name} to 1 replica.", flush=True)
+            return True
+        except Exception as e:
+            print(f"[RECOVERY] [ERROR] Failed to scale up {app_name}: {e}", flush=True)
+            return False
+
+    def promote_slave(slave_host):
+        print(f"[FAILOVER] Initiating database failover to promote {slave_host}...", flush=True)
+        
+        if slave_host == SECONDARY_HOST:
+            master_app = "mysql-primary"
+            slave_app = "mysql-secondary"
+        else:
+            master_app = "mysql-secondary"
+            slave_app = "mysql-primary"
+            
+        fence_master(master_app)
+        
+        try:
+            conn = get_db_connection(slave_host)
+            conn.autocommit(True)
+            with conn.cursor() as cursor:
+                print(f"[FAILOVER] Stopping replication on {slave_host}...", flush=True)
+                cursor.execute("STOP SLAVE;")
+                cursor.execute("RESET SLAVE ALL;")
+                print(f"[FAILOVER] Disabling read_only mode on {slave_host}...", flush=True)
+                cursor.execute("SET GLOBAL read_only = OFF;")
+                cursor.execute("SET GLOBAL super_read_only = OFF;")
+            conn.close()
+            print(f"[FAILOVER] {slave_host} successfully promoted to master!", flush=True)
+        except Exception as e:
+            print(f"[FAILOVER] [CRITICAL] Failed to promote {slave_host}: {e}", flush=True)
+            return False
+
+        if redirect_service(slave_app):
+            scale_up_statefulset(master_app)
+            return True
+        return False
+
+    def check_and_heal_slave(master_host, slave_host):
+        # 1. Ensure replication user exists on master
+        try:
+            conn = get_db_connection(master_host)
+            conn.autocommit(True)
+            with conn.cursor() as cursor:
+                cursor.execute(f"CREATE USER IF NOT EXISTS '{REPL_USER}'@'%' IDENTIFIED BY '{REPL_PASS}';")
+                cursor.execute(f"GRANT REPLICATION SLAVE ON *.* TO '{REPL_USER}'@'%';")
+                cursor.execute("FLUSH PRIVILEGES;")
+            conn.close()
+        except Exception as e:
+            print(f"[HEALER] [WARNING] Could not check/create replication user on master {master_host}: {e}", flush=True)
+            return False
+
+        # 2. Check slave status
+        try:
+            conn = pymysql.connect(
+                host=slave_host,
+                user=DB_USER,
+                password=DB_PASSWORD,
+                cursorclass=pymysql.cursors.DictCursor,
+                connect_timeout=3
+            )
+        except Exception as e:
+            # Slave is down or booting
+            return False
+
+        try:
+            conn.autocommit(True)
+            with conn.cursor() as cursor:
+                # Ensure slave is in read_only mode
+                cursor.execute("SET GLOBAL read_only = ON;")
+                cursor.execute("SET GLOBAL super_read_only = ON;")
+                
+                cursor.execute("SHOW SLAVE STATUS;")
+                status = cursor.fetchone()
+                
+                if status:
+                    io_run = status.get("Slave_IO_Running")
+                    sql_run = status.get("Slave_SQL_Running")
+                    last_error = status.get("Last_Error") or status.get("Last_IO_Error") or status.get("Last_SQL_Error")
+                    
+                    if io_run == "Yes" and sql_run == "Yes":
+                        # Replication is already healthy!
+                        conn.close()
+                        return True
+                    
+                    print(f"[HEALER] Replication status unhealthy on {slave_host}: IO={io_run}, SQL={sql_run}. Error: {last_error}", flush=True)
+                
+                print(f"[HEALER] Attempting to (re)start replication on {slave_host}...", flush=True)
+                cursor.execute("STOP SLAVE;")
+                cursor.execute("RESET SLAVE;")
+                change_query = f"""
+                    CHANGE MASTER TO
+                    MASTER_HOST='{master_host}',
+                    MASTER_USER='{REPL_USER}',
+                    MASTER_PASSWORD='{REPL_PASS}',
+                    MASTER_AUTO_POSITION=1;
+                """
+                cursor.execute(change_query)
+                cursor.execute("START SLAVE;")
+                time.sleep(3)
+                
+                cursor.execute("SHOW SLAVE STATUS;")
+                status = cursor.fetchone()
+                if status and status.get("Slave_IO_Running") == "Yes" and status.get("Slave_SQL_Running") == "Yes":
+                    print(f"[HEALER] Replication successfully established on {slave_host}.", flush=True)
+                    conn.close()
+                    return True
+                    
+                last_error = status.get("Last_Error") or status.get("Last_IO_Error") or status.get("Last_SQL_Error") if status else "Unknown error"
+                print(f"[HEALER] Replication start failed with error: {last_error}. Initiating CLONE physical sync...", flush=True)
+                
+                cursor.execute("STOP SLAVE;")
+                clone_query = f"CLONE INSTANCE FROM 'root'@'{master_host}':3306 IDENTIFIED BY '{DB_PASSWORD}';"
+                try:
+                    cursor.execute(clone_query)
+                except Exception as clone_err:
+                    print(f"[HEALER] CLONE command sent to {slave_host}. Connection lost as server restarts (normal behavior).", flush=True)
+            
+            try:
+                conn.close()
+            except:
+                pass
+            return False
+        except Exception as e:
+            print(f"[HEALER] [ERROR] Exception during heal check on {slave_host}: {e}", flush=True)
+            try:
+                conn.close()
+            except:
+                pass
+            return False
+
+    def ensure_master_writable(master_host):
+        try:
+            conn = get_db_connection(master_host)
+            conn.autocommit(True)
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT @@global.read_only;")
+                row = cursor.fetchone()
+                if row and row[0] == 1:
+                    print(f"[MONITOR] Master {master_host} is in read-only mode. Disabling read-only...", flush=True)
+                    cursor.execute("SET GLOBAL read_only = OFF;")
+                    cursor.execute("SET GLOBAL super_read_only = OFF;")
+                    print(f"[MONITOR] Master {master_host} is now writable.", flush=True)
+            conn.close()
+            return True
+        except Exception as e:
+            return False
+
+    def main():
+        print("[INIT] Waiting 15 seconds for databases to boot...", flush=True)
+        time.sleep(15)
+        
+        failures = 0
+        max_failures = 3
+        last_heal_time = 0
+        
+        print("[MONITOR] Starting continuous bidirectional HA monitor loop...", flush=True)
+        while True:
+            current_master = get_current_master()
+            if not current_master:
+                print("[MONITOR] [WARNING] Could not determine current master app. Retrying in 5s...", flush=True)
+                time.sleep(5)
+                continue
+                
+            if current_master == "mysql-primary":
+                master_host = PRIMARY_HOST
+                slave_host = SECONDARY_HOST
+            else:
+                master_host = SECONDARY_HOST
+                slave_host = PRIMARY_HOST
+                
+            # Ensure the master is writable
+            ensure_master_writable(master_host)
+            
+            # Periodically (every 30 seconds) check and heal the slave
+            now = time.time()
+            if now - last_heal_time >= 30:
+                check_and_heal_slave(master_host, slave_host)
+                last_heal_time = now
+                
+            # Monitor the health of the active master
+            try:
+                conn = get_db_connection(master_host)
+                conn.ping(reconnect=False)
+                conn.close()
+                if failures > 0:
+                    print(f"[MONITOR] Master {master_host} is healthy again. Resetting failure counter.", flush=True)
+                failures = 0
+            except Exception as e:
+                failures += 1
+                print(f"[MONITOR] [WARNING] Master database {master_host} check failed ({failures}/{max_failures}). Error: {e}", flush=True)
+                if failures >= max_failures:
+                    print(f"[MONITOR] [CRITICAL] Master database {master_host} is down. Promoting slave {slave_host}!", flush=True)
+                    if promote_slave(slave_host):
+                        print("[MONITOR] Failover successful. Resetting failure counter and updating monitored targets.", flush=True)
+                        failures = 0
+                        last_heal_time = 0
+                    else:
+                        print("[MONITOR] [CRITICAL] Failover failed. Retrying in 10s...", flush=True)
+                        time.sleep(10)
+            time.sleep(5)
+
+    if __name__ == "__main__":
+        main()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: failover-controller
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: failover-controller
+  template:
+    metadata:
+      labels:
+        app: failover-controller
+    spec:
+      serviceAccountName: failover-sa
+      containers:
+        - name: controller
+          image: python:3.9-slim
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              pip install pymysql kubernetes --no-cache-dir
+              python /app/failover.py
+          env:
+            - name: PRIMARY_HOST
+              value: mysql-primary
+            - name: SECONDARY_HOST
+              value: mysql-secondary
+            - name: DB_USER
+              value: root
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secrets
+                  key: mysql-root-password
+            - name: SERVICE_NAME
+              value: votesystem-db
+            - name: NAMESPACE
+              value: default
+            - name: REPL_USER
+              value: repl
+            - name: REPL_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secrets
+                  key: mysql-repl-password
+          volumeMounts:
+            - name: script-vol
+              mountPath: /app
+      volumes:
+        - name: script-vol
+          configMap:
+            name: failover-script-config

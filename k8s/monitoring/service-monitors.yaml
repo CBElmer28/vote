@@ -1,0 +1,38 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: votesystem-services-monitor
+  namespace: default
+  labels:
+    release: prometheus # Labels can be used for auto-discovery
+spec:
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - ms-usuarios
+          - ms-biometrico
+          - ms-votacion
+          - ms-analisis
+          - ms-candidatos
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 10s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: pxc-pod-monitor
+  namespace: prod-db
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: percona-xtradb-cluster
+      app.kubernetes.io/component: pxc
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 10s

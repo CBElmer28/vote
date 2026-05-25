@@ -19,6 +19,7 @@ from webauthn.helpers.structs import (
     UserVerificationRequirement,
     ResidentKeyRequirement,
     AttestationConveyancePreference,
+    PublicKeyCredentialDescriptor,
 )
 from webauthn.helpers.exceptions import InvalidAuthenticationResponse
 
@@ -34,10 +35,11 @@ class WebAuthnFingerprintService:
         try:
             allow_credentials = []
             if credential_id:
-                allow_credentials.append({
-                    "id": credential_id.encode('utf-8') if isinstance(credential_id, str) else credential_id,
-                    "type": "public-key"
-                })
+                allow_credentials.append(
+                    PublicKeyCredentialDescriptor(
+                        id=credential_id.encode('utf-8') if isinstance(credential_id, str) else credential_id
+                    )
+                )
 
             options = generate_authentication_options(
                 rp_id=self.rp_id,

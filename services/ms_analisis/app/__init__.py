@@ -2,12 +2,14 @@ from flask import Flask
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from config import Config
+from prometheus_flask_exporter import PrometheusMetrics
 
 db = SQLAlchemy()
 
 
 def create_app():
     app = Flask(__name__)
+    metrics = PrometheusMetrics(app)
     app.config.from_object(Config)
 
     CORS(app)

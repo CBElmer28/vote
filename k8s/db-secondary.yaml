@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-secondary-config
+  namespace: default
+data:
+  secondary.cnf: |
+    [mysqld]
+    server-id=2
+    log-bin=mysql-bin
+    binlog_format=row
+    gtid_mode=ON
+    enforce_gtid_consistency=ON
+    log-slave-updates=ON
+    read_only=ON
+    super_read_only=ON
+    plugin-load-add=semisync_slave.so
+    plugin-load-add=mysql_clone.so
+    rpl_semi_sync_slave_enabled=1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-secondary-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-secondary
+  namespace: default
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: mysql-secondary
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-secondary
+  namespace: default
+spec:
+  serviceName: mysql-secondary
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-secondary
+  template:
+    metadata:
+      labels:
+        app: mysql-secondary
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          args:
+            - "--default-authentication-plugin=mysql_native_password"
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secrets
+                  key: mysql-root-password
+          ports:
+            - containerPort: 3306
+              name: mysql
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+            - name: mysql-config
+              mountPath: /etc/mysql/conf.d
+          livenessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 5
+      volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: mysql-secondary-pvc
+        - name: mysql-config
+          configMap:
+            name: mysql-secondary-config

@@ -41,7 +41,7 @@ def seed():
     # Conectar a la DB (usamos host 'db' interno)
     try:
         connection = pymysql.connect(
-            host='db',
+            host=os.getenv('DB_HOST', 'votesystem-db'),
             port=3306,
             user='voteuser',
             password='votepassword',
