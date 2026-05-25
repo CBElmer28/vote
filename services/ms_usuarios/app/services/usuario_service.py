@@ -1,5 +1,6 @@
 import re
 from app.repositories.usuario_repository import UserRepository
+from app.utils.security_utils import sanitize_input
 
 
 class UserService:
@@ -44,10 +45,19 @@ class UserService:
         return user.to_dict(), None
 
     def create_user(self, data: dict):
+        data = sanitize_input(data)
         # Required fields
         for field in ["first_name", "paternal_last_name", "maternal_last_name", "dob", "dni"]:
             if not data.get(field):
                 return None, f"Field '{field}' is required"
+
+        # Parse date if string
+        if isinstance(data["dob"], str):
+            try:
+                from datetime import datetime
+                data["dob"] = datetime.strptime(data["dob"], "%Y-%m-%d").date()
+            except ValueError:
+                return None, "Invalid date format. Use YYYY-MM-DD"
 
         # DNI format
         err = self._validate_dni(data["dni"])
@@ -62,6 +72,7 @@ class UserService:
         return user.to_dict(), None
 
     def update_user(self, user_id: int, data: dict):
+        data = sanitize_input(data)
         user = self.repo.get_by_id(user_id)
         if not user:
             return None, "User not found"

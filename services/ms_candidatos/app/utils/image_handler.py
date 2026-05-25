@@ -47,6 +47,13 @@ class ImageHandler:
             
             # 2. Decode the image
             img_data = base64.b64decode(base64_str)
+
+            # Security: Check size (5MB limit)
+            MAX_FILE_SIZE = 5 * 1024 * 1024
+            if len(img_data) > MAX_FILE_SIZE:
+                print("Image blocked: File exceeds 5MB limit.")
+                return None
+
             img = Image.open(io.BytesIO(img_data))
             
             # Security: Validate format

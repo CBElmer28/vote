@@ -186,8 +186,8 @@
     "submit": "Complete Registration",
     "fingerprint_registration_title": "Fingerprint Registration",
     "fingerprint_registration_subtitle": "Prepare the fingerprint reader to avoid problems in registration",
-    "webauthn_module": "WebAuthn Security Module",
-    "fingerprint_instruction": "The fingerprint will be requested upon pressing the 'Complete Registration' button."
+    "webauthn_module": "Biometric Security Module",
+    "fingerprint_instruction": "Select or capture the fingerprint for central registration."
   },
   "accessibility": {
     "title": "Accessibility",

@@ -32,6 +32,7 @@ class User(db.Model):
     aws_face_id            = db.Column(db.String(255), unique=True, nullable=True)
     webauthn_credential_id = db.Column(db.String(255), unique=True, nullable=True)
     webauthn_public_key    = db.Column(db.Text, nullable=True)
+    fingerprint_template   = db.Column(db.JSON, nullable=True)
     
     is_active           = db.Column(db.Boolean,     default=True, nullable=False)
     role_id             = db.Column(db.Integer,     db.ForeignKey('roles.id'), nullable=False, default=2)
@@ -58,6 +59,7 @@ class User(db.Model):
             "photo_url":             self.photo_url,
             "aws_face_id":           self.aws_face_id,
             "webauthn_credential_id":self.webauthn_credential_id,
+            "fingerprint_template":  self.fingerprint_template,
             "is_active":             self.is_active,
             "role":                  self.role.name if self.role else "VOTER",
             "created_at":            str(self.created_at),

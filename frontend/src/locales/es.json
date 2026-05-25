@@ -189,8 +189,8 @@
     "submit": "Completar Empadronamiento",
     "fingerprint_registration_title": "Registro de Huella Dactilar",
     "fingerprint_registration_subtitle": "Prepare el lector de huellas para evitar problemas en el registro",
-    "webauthn_module": "Módulo de Seguridad WebAuthn",
-    "fingerprint_instruction": "La huella se solicitará al presionar el botón \"Completar Empadronamiento\"."
+    "webauthn_module": "Módulo de Seguridad Biométrica",
+    "fingerprint_instruction": "Seleccione o capture la huella dactilar para el registro central."
   },
   "accessibility": {
     "title": "Accesibilidad",

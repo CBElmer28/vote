@@ -1,6 +1,6 @@
 import os
 import boto3
-import mysql.connector
+import pymysql
 from dotenv import load_dotenv
 
 # 1. Cargar el .env (opcional, útil para local)
@@ -8,16 +8,17 @@ env_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
 if os.path.exists(env_path):
     load_dotenv(dotenv_path=env_path)
 else:
-    load_dotenv() # Intenta cargar desde el CWD o variables de entorno del sistema
+    load_dotenv() 
 
 # 2. Configuración de BD
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', '127.0.0.1'),
-    'port': int(os.getenv('DB_PORT', 3307)) if os.getenv('DB_HOST') != 'db' else 3306,
-    'user': os.getenv('MYSQL_USER', 'voteuser'),
-    'password': os.getenv('MYSQL_PASSWORD', 'votepassword'),
-    'database': os.getenv('MYSQL_DATABASE', 'votesystem')
+    'port': int(os.getenv('DB_PORT', 3307)) if os.getenv('DB_HOST') not in ['db', 'votesystem_db'] else 3306,
+    'user': os.getenv('DB_USER', os.getenv('MYSQL_USER', 'voteuser')),
+    'password': os.getenv('DB_PASSWORD', os.getenv('MYSQL_PASSWORD', 'votepassword')),
+    'database': os.getenv('DB_NAME', os.getenv('MYSQL_DATABASE', 'votesystem'))
 }
+
 # 3. Configuración de AWS
 rek_client = boto3.client(
     'rekognition',
@@ -38,13 +39,23 @@ def seed_biometrics():
         print(f"Colección '{COLLECTION_ID}' creada en AWS.")
     except rek_client.exceptions.ResourceAlreadyExistsException:
         print(f"La colección '{COLLECTION_ID}' ya existe en AWS. Continuando...")
-
-    # Conectar a MySQL
-    try:
-        conn = mysql.connector.connect(**DB_CONFIG)
-        cursor = conn.cursor(dictionary=True)
     except Exception as e:
-        print(f"Error al conectar a la Base de Datos. ¿Está corriendo Docker? Detalle: {e}")
+        print(f"Error crítico al conectar con AWS Rekognition: {e}")
+        return
+
+    # Conectar a MySQL usando pymysql
+    try:
+        conn = pymysql.connect(
+            host=DB_CONFIG['host'],
+            port=DB_CONFIG['port'],
+            user=DB_CONFIG['user'],
+            password=DB_CONFIG['password'],
+            database=DB_CONFIG['database'],
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        cursor = conn.cursor()
+    except Exception as e:
+        print(f"Error al conectar a la Base de Datos. Detalle: {e}")
         return
 
     # Leer la carpeta de fotos
@@ -76,7 +87,7 @@ def seed_biometrics():
                 image_bytes = img_file.read()
 
             try:
-                # Enviar foto a AWS
+                # Enviar foto a AWS Rekognition
                 response = rek_client.index_faces(
                     CollectionId=COLLECTION_ID,
                     Image={'Bytes': image_bytes},
@@ -87,19 +98,19 @@ def seed_biometrics():
                 if response['FaceRecords']:
                     face_id = response['FaceRecords'][0]['Face']['FaceId']
                     
-                    # Actualizar BD
+                    # Actualizar BD con el FaceId real de AWS
                     cursor.execute(
                         "UPDATE users SET aws_face_id = %s WHERE id = %s",
                         (face_id, user_id)
                     )
                     conn.commit()
-                    print(f"Exito: Vector biométrico vinculado (FaceId: {face_id})")
+                    print(f"Exito: Rostro indexado en AWS y vinculado en BD (FaceId: {face_id})")
                     fotos_procesadas += 1
                 else:
                     print(f"Advertencia: AWS no detectó un rostro claro en la foto {filename}")
 
             except Exception as e:
-                print(f"Error procesando en AWS: {e}")
+                print(f"Error procesando en AWS para DNI {dni}: {e}")
 
     cursor.close()
     conn.close()

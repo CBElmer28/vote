@@ -27,7 +27,7 @@ Antes de arrancar el proyecto, asegúrate de tener instalado:
 
 ---
 
-## 🛠️ Instalación y Configuración
+## 🛠️ Instalación y Configuración (Docker Compose)
 
 ### 1. Variables de Entorno
 Clona este repositorio y configura las variables de entorno. 
@@ -57,6 +57,14 @@ npm run dev
 ```
 
 El frontend estará disponible en [http://localhost:5173](http://localhost:5173).
+
+---
+
+## ☸️ Despliegue Avanzado en Kubernetes (Kind, Percona y Monitoreo)
+
+Para desplegar este proyecto en un clúster Kubernetes local con base de datos en alta disponibilidad y monitorización con Prometheus y Grafana, consulta nuestra guía específica para entornos K8s:
+
+👉 **[Guía de Kubernetes y Monitoreo (README_K8S.md)](README_K8S.md)**
 
 ---
 
