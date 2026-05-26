@@ -7,11 +7,13 @@ from prometheus_flask_exporter import PrometheusMetrics
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
+from flask import request
+
 db = SQLAlchemy()
 limiter = Limiter(
-    key_func=get_remote_address,
+    """ key_func=get_remote_address,
     default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://",
+    storage_uri="memory://", """
 )
 
 
@@ -26,6 +28,10 @@ def create_app(test_config=None):
     CORS(app)
     db.init_app(app)
     limiter.init_app(app)
+
+    @limiter.request_filter
+    def exempt_metrics():
+        return request.path == "/metrics" or request.path == "/api/usuarios/health"
 
     # Registrar blueprints (controladores)
     from app.controllers.usuario_controller import usuario_bp

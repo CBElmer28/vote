@@ -28,7 +28,7 @@ spec:
             - name: FLASK_DEBUG
               value: "0"
             - name: BIOMETRIC_MODE
-              value: mock
+              value: "aws"
             - name: AZURE_FACE_API_KEY
               value: YOUR_KEY_HERE
             - name: AZURE_FACE_ENDPOINT
@@ -40,9 +40,15 @@ spec:
             - name: FP_CONFIDENCE_THRESHOLD
               value: "0.7"
             - name: AWS_ACCESS_KEY_ID
-              value: ""
+              valueFrom:
+                secretKeyRef:
+                  name: aws-secrets
+                  key: aws-access-key-id
             - name: AWS_SECRET_ACCESS_KEY
-              value: ""
+              valueFrom:
+                secretKeyRef:
+                  name: aws-secrets
+                  key: aws-secret-access-key
             - name: AWS_REGION
               value: us-east-1
             - name: SECRET_KEY
