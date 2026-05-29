@@ -28,3 +28,7 @@ frontend/build/
 frontend/dist/
 frontend/playwright-report/
 frontend/test-results/
+
+*kubeconfig*
+*secret*.yaml
+*.secrets.yaml

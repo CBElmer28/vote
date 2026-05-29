@@ -2,7 +2,7 @@ import requests
 import time
 import sys
 
-API_GATEWAY = "http://127.0.0.1:80"
+API_GATEWAY = "http://localhost:80"
 
 class Colors:
     GREEN = '\033[92m'

@@ -8,7 +8,7 @@ from kubernetes.client.rest import ApiException
 #  CONFIGURACIÓN
 # ============================================================
 
-API_GATEWAY  = "http://127.0.0.1:80"
+API_GATEWAY  = "http://localhost:80"
 TIMEOUT      = 5.0
 
 NS_SERVICES = "default"
@@ -114,7 +114,7 @@ def print_pxc_status(core_v1: client.CoreV1Api):
     log(f"    {'POD':<35} {'FASE':<12} {'READY'}", C.CYAN)
     for p in pods:
         fase  = p.status.phase or "Unknown"
-        ready = "✓" if pod_is_ready(p) else "✗"
+        ready = "[OK]" if pod_is_ready(p) else "[FAIL]"
         log(f"    {p.metadata.name:<35} {fase:<12} {ready}")
     return pods
 
@@ -189,7 +189,7 @@ def diagnose_routes():
     for method, url, kwargs in routes:
         status, elapsed, err = probe(method, url, **kwargs)
         desc = err if err else f"HTTP {status}"
-        log(f"  {method:4s} {url}  →  {desc}  ({elapsed:.3f}s)")
+        log(f"  {method:4s} {url}  ->  {desc}  ({elapsed:.3f}s)")
 
 # ============================================================
 #  Suite de Tests
@@ -267,7 +267,7 @@ def run_tests():
     for i in range(8):
         s, e, err = probe("GET", ENDPOINT_USUARIOS)
         alive = is_alive(s)
-        symbol = C.GREEN + "✓" if alive else C.RED + "✗"
+        symbol = C.GREEN + "[OK]" if alive else C.RED + "[FAIL]"
         label  = "SIRVE" if alive else ("TIMEOUT" if err == "TIMEOUT" else f"HTTP {s}")
         log(f"      [{i+1}/8] {symbol} {label}{C.RESET}  ({e:.3f}s)")
         samples.append(alive)
@@ -302,61 +302,7 @@ def run_tests():
         log(f"      [FALLO] ms_usuarios no responde tras la recuperación: "
             f"{err or status}", C.RED)
 
-    # =========================================================
-    # TEST 2: Caída de ms_biometrico (Deployment)
-    # =========================================================
-    log(f"\n{C.BOLD}[Test 2] Simulando caida de ms_biometrico...{C.RESET}", C.YELLOW)
-
-    log("  2.1 Escalando ms_biometrico a 0...")
-    try:
-        scale_deployment(apps_v1, DEPLOY_BIOMETRICO, 0)
-        wait_for_deploy_down(apps_v1, DEPLOY_BIOMETRICO)
-    except ApiException as e:
-        log(f"      Error: {e.reason}", C.RED)
-
-    log("  2.2 Gateway debe rechazar rápido sin backend biométrico...")
-    status, elapsed, err = probe("POST", ENDPOINT_BIOMETRICO, data={"foo": "bar"})
-    result = evaluate_fail_fast(status, elapsed, err, "Fail-Fast Biométrico")
-    if result is None and status == 400:
-        log("      NOTA: 400 probablemente es validación nginx. Revisa nginx.conf.", C.CYAN)
-
-    log("  2.3 Restaurando ms_biometrico...")
-    try:
-        scale_deployment(apps_v1, DEPLOY_BIOMETRICO, 1)
-    except ApiException as e:
-        log(f"      Error: {e.reason}", C.RED)
-    time.sleep(8)
-
-    # =========================================================
-    # TEST 3: Caída de ms_votacion (Deployment)
-    # =========================================================
-    log(f"\n{C.BOLD}[Test 3] Simulando caida de ms_votacion...{C.RESET}", C.YELLOW)
-
-    log("  3.1 Escalando ms_votacion a 0...")
-    try:
-        scale_deployment(apps_v1, DEPLOY_VOTACION, 0)
-        wait_for_deploy_down(apps_v1, DEPLOY_VOTACION)
-    except ApiException as e:
-        log(f"      Error: {e.reason}", C.RED)
-
-    log("  3.2 Gateway debe rechazar rápido sin backend de votación...")
-    status, elapsed, err = probe(
-        "POST", ENDPOINT_VOTACION,
-        json={"dni": "12345678", "candidato_id": 1}
-    )
-    result = evaluate_fail_fast(status, elapsed, err, "Fail-Fast Votación")
-    if result is None and status == 404:
-        log("      NOTA: 404 sugiere que la ruta no está en nginx.conf.", C.CYAN)
-        log("        kubectl exec -n default deploy/gateway -- cat /etc/nginx/nginx.conf", C.CYAN)
-
-    log("  3.3 Restaurando ms_votacion...")
-    try:
-        scale_deployment(apps_v1, DEPLOY_VOTACION, 1)
-    except ApiException as e:
-        log(f"      Error: {e.reason}", C.RED)
-    time.sleep(8)
-
-    log(f"\n{C.BOLD}Pruebas de Recuperacion finalizadas.{C.RESET}", C.GREEN)
+    log(f"\n{C.BOLD}Pruebas de Recuperacion de Base de Datos finalizadas.{C.RESET}", C.GREEN)
 
 
 if __name__ == "__main__":

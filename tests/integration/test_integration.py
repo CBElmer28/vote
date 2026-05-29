@@ -64,10 +64,16 @@ def auth_token(registered_user):
 
 
 @pytest.fixture(scope="module")
-def candidate(request):
+def unique_candidate_name():
+    """Generates a unique candidate name to avoid collisions in DB."""
+    return f"Candidato Integracion {str(uuid.uuid4().int)[:6]}"
+
+
+@pytest.fixture(scope="module")
+def candidate(unique_candidate_name):
     """Creates a test candidate and cleans up after the module."""
     payload = {
-        "full_name": "Candidato Integración",
+        "full_name": unique_candidate_name,
         "party": "Partido Test",
         "description": "Candidato creado para pruebas de integración"
     }
@@ -183,9 +189,9 @@ class TestCandidateFlow:
     Create candidate → list → retrieve → update → verify update.
     """
 
-    def test_candidate_created(self, candidate):
+    def test_candidate_created(self, candidate, unique_candidate_name):
         """Verify candidate is created with correct data."""
-        assert candidate["full_name"] == "Candidato Integración"
+        assert candidate["full_name"] == unique_candidate_name
         assert candidate["party"] == "Partido Test"
 
     def test_candidate_in_list(self, candidate):

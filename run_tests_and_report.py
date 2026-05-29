@@ -83,7 +83,9 @@ def run_integration_tests():
         python_path = "python"
         
     cmd = [python_path, "-m", "pytest", "tests/integration/", f"--junitxml={INTEGRATION_XML}", "-q"]
-    subprocess.run(cmd, capture_output=True, text=True)
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    subprocess.run(cmd, capture_output=True, text=True, env=env)
     
     if os.path.exists(INTEGRATION_XML):
         try:
@@ -163,7 +165,9 @@ def run_script_test(script_path, suite_name):
         python_path = "python"
         
     cmd = [python_path, script_path]
-    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore")
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore", env=env)
     
     clean_stdout = clean_ansi(res.stdout)
     
@@ -193,8 +197,8 @@ def run_script_test(script_path, suite_name):
         if payload_match:
             temp_metrics["payload_size_kb"] = float(payload_match.group(1))
             
-        if "[EXITO]" in line:
-            msg = line.replace("[EXITO]", "").strip()
+        if "[EXITO]" in line or "[ÉXITO]" in line:
+            msg = line.replace("[EXITO]", "").replace("[ÉXITO]", "").strip()
             microservice, endpoint, category = map_script_test_metadata(suite_name, current_test_topic)
             results.append({
                 "name": f"{current_test_topic} (Verification {test_case_idx})",
@@ -290,17 +294,30 @@ def map_script_test_metadata(suite_name, topic):
             
     elif suite_name == "Recovery":
         category = "Chaos / Resilience"
-        if "MySQL" in topic:
+        topic_lower = topic.lower()
+        if any(x in topic_lower for x in ["bd", "galera", "mysql", "pxc", "database"]):
             microservice = "db"
-            endpoint = "/api/usuarios/by-email/<email>"
+            endpoint = "/api/usuarios/by-email/admin@test.local"
             category = "Resilience / Database Down"
-        elif "ms_biometrico" in topic:
-            microservice = "ms_biometrico"
-            endpoint = "/api/biometrico/verify/fingerprint/minutiae"
+        elif "usuarios" in topic_lower or "ms-usuarios" in topic_lower:
+            microservice = "ms_usuarios"
+            endpoint = "/api/usuarios/health"
             category = "Resilience / Microservice Down"
-        elif "ms_votacion" in topic:
+        elif "biometrico" in topic_lower or "ms-biometrico" in topic_lower:
+            microservice = "ms_biometrico"
+            endpoint = "/api/biometrico/health"
+            category = "Resilience / Microservice Down"
+        elif "votacion" in topic_lower or "ms-votacion" in topic_lower:
             microservice = "ms_votacion"
-            endpoint = "/api/votacion/cast"
+            endpoint = "/api/votacion/health"
+            category = "Resilience / Microservice Down"
+        elif "candidatos" in topic_lower or "ms-candidatos" in topic_lower:
+            microservice = "ms_candidatos"
+            endpoint = "/api/candidatos/health"
+            category = "Resilience / Microservice Down"
+        elif "analisis" in topic_lower or "ms-analisis" in topic_lower:
+            microservice = "ms_analisis"
+            endpoint = "/api/analisis/health"
             category = "Resilience / Microservice Down"
             
     elif suite_name == "Performance":
@@ -449,8 +466,10 @@ def main():
     # 3. Run Security Tests
     all_results["Security"] = run_script_test(os.path.join("tests", "security_tests.py"), "Security")
     
-    # 4. Run Recovery/Chaos Tests
-    all_results["Recovery"] = run_script_test(os.path.join("tests", "recovery_tests.py"), "Recovery")
+    # 4. Run Recovery/Chaos Tests (both DB and Microservices tests)
+    recovery_db_results = run_script_test(os.path.join("tests", "recovery_tests.py"), "Recovery")
+    recovery_ms_results = run_script_test(os.path.join("tests", "recovery_tests_ms.py"), "Recovery")
+    all_results["Recovery"] = recovery_db_results + recovery_ms_results
     
     # 5. Run Performance Profiler
     all_results["Performance"] = run_script_test(os.path.join("tests", "performance_profiler.py"), "Performance")
