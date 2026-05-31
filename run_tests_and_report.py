@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import sys
 import subprocess
 import json
 import csv
@@ -78,9 +79,8 @@ def run_integration_tests():
     print(">>> Running Integration Tests...")
     results = []
     
-    python_path = os.path.join(".venv", "Scripts", "python")
-    if not os.path.exists(python_path):
-        python_path = "python"
+    # 🔴 FIX 3: Usa el ejecutable del entorno virtual activo, compatible con Linux (GitHub Actions) y Windows
+    python_path = sys.executable
         
     cmd = [python_path, "-m", "pytest", "tests/integration/", f"--junitxml={INTEGRATION_XML}", "-q"]
     env = os.environ.copy()
@@ -160,9 +160,8 @@ def run_script_test(script_path, suite_name):
     print(f">>> Running {suite_name} Tests ({script_path})...")
     results = []
     
-    python_path = os.path.join(".venv", "Scripts", "python")
-    if not os.path.exists(python_path):
-        python_path = "python"
+    # 🔴 FIX 3: Usa sys.executable
+    python_path = sys.executable
         
     cmd = [python_path, script_path]
     env = os.environ.copy()
@@ -170,12 +169,9 @@ def run_script_test(script_path, suite_name):
     res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore", env=env)
     
     clean_stdout = clean_ansi(res.stdout)
-    
     current_test_topic = f"{suite_name} Setup/Check"
-    
     lines = clean_stdout.split("\n")
     test_case_idx = 1
-    
     temp_metrics = {"latency_ms": 0.0, "payload_size_kb": "N/A"}
     
     for line in lines:
@@ -189,9 +185,13 @@ def run_script_test(script_path, suite_name):
             temp_metrics = {"latency_ms": 0.0, "payload_size_kb": "N/A"}
             continue
             
-        latency_match = re.search(r'(?:Tiempo de ejecucion|Time elapsed):\s*([\d.]+)\s*ms', line, re.IGNORECASE)
+        # 🔴 FIX 1: Regex para capturar ms o el formato "(0.123s)" del test de Caos
+        latency_match = re.search(r'(?:Tiempo de ejecucion|Time elapsed):\s*([\d.]+)\s*ms|\(([\d.]+)\s*s\)', line, re.IGNORECASE)
         if latency_match:
-            temp_metrics["latency_ms"] = float(latency_match.group(1))
+            if latency_match.group(1):
+                temp_metrics["latency_ms"] = float(latency_match.group(1))
+            elif latency_match.group(2):
+                temp_metrics["latency_ms"] = float(latency_match.group(2)) * 1000
             
         payload_match = re.search(r'(?:Tamano del Payload|Payload size):\s*([\d.]+)\s*KB', line, re.IGNORECASE)
         if payload_match:
@@ -394,58 +394,47 @@ def parse_playwright_suites(suites, results_list):
         if "suites" in suite:
             parse_playwright_suites(suite["suites"], results_list)
 
+# 🔴 FIX 2: Ejecuta Playwright escribiendo directo a un archivo temporal para evitar colapsos por stdout
 def run_playwright_tests():
-    print(">>> Running Playwright Frontend Tests (npx playwright test)...")
+    print(">>> Running Playwright Frontend Tests...")
     results = []
+    report_file = os.path.join("frontend", "playwright_report.json")
+    
+    # Configurar variable de entorno para que Playwright guarde el JSON
+    env = os.environ.copy()
+    env["PLAYWRIGHT_JSON_OUTPUT_NAME"] = "playwright_report.json"
     
     cmd = "npx playwright test --project=chromium --reporter=json"
-    res = subprocess.run(cmd, cwd="frontend", shell=True, capture_output=True, text=True)
+    subprocess.run(cmd, cwd="frontend", shell=True, env=env)
     
-    stdout_content = res.stdout
-    
-    if stdout_content:
+    if os.path.exists(report_file):
         try:
-            # Find the JSON boundaries
-            start_idx = stdout_content.find('{')
-            end_idx = stdout_content.rfind('}')
-            if start_idx != -1 and end_idx != -1:
-                json_str = stdout_content[start_idx:end_idx+1]
-                report_data = json.loads(json_str)
-                
-                suites = report_data.get("suites", [])
-                parse_playwright_suites(suites, results)
-            else:
-                results.append({
-                    "name": "Playwright Tests Run",
-                    "microservice": "frontend",
-                    "endpoint": "UI / Client",
-                    "category": "Setup",
-                    "status": "FAILED",
-                    "latency_ms": 0.0,
-                    "payload_size_kb": "N/A",
-                    "details": f"Could not find JSON block in stdout. Raw output: {stdout_content[:200]}"
-                })
+            with open(report_file, "r", encoding="utf-8") as f:
+                report_data = json.load(f)
+            suites = report_data.get("suites", [])
+            parse_playwright_suites(suites, results)
+            os.remove(report_file) # Limpiar después de leer
         except Exception as e:
             results.append({
-                "name": "Playwright Tests Parsing",
-                "microservice": "frontend",
-                "endpoint": "UI / Client",
-                "category": "Setup",
-                "status": "FAILED",
-                "latency_ms": 0.0,
-                "payload_size_kb": "N/A",
-                "details": f"Error parsing Playwright JSON: {str(e)}. Raw output: {stdout_content[:200]}"
+                "name": "Playwright Tests Parsing", 
+                "status": "FAILED", 
+                "details": str(e), 
+                "microservice": "frontend", 
+                "endpoint": "UI / Client", 
+                "category": "Setup", 
+                "latency_ms": 0.0, 
+                "payload_size_kb": "N/A"
             })
     else:
         results.append({
-            "name": "Playwright Tests Run",
-            "microservice": "frontend",
-            "endpoint": "UI / Client",
-            "category": "Setup",
-            "status": "FAILED",
-            "latency_ms": 0.0,
-            "payload_size_kb": "N/A",
-            "details": f"Playwright returned empty stdout. Stderr: {res.stderr[:200]}"
+            "name": "Playwright Tests Run", 
+            "status": "FAILED", 
+            "details": "No report generated. Check if Playwright dependencies are installed.", 
+            "microservice": "frontend", 
+            "endpoint": "UI / Client", 
+            "category": "Setup", 
+            "latency_ms": 0.0, 
+            "payload_size_kb": "N/A"
         })
         
     return results
