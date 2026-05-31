@@ -1,0 +1,44 @@
+apiVersion: pxc.percona.com/v1
+kind: PerconaXtraDBCluster
+metadata:
+  name: votesystem-db
+  namespace: prod-db
+spec:
+  crVersion: 1.19.1
+  secretsName: mysql-secrets
+  unsafeFlags:
+    tls: true
+  tls:
+    enabled: false
+  pxc:
+    size: 3
+    image: percona/percona-xtradb-cluster:8.0.32-24.2
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+      limits:
+        cpu: "300m"
+        memory: "512Mi"
+    volumeSpec:
+      persistentVolumeClaim:
+        resources:
+          requests:
+            storage: 2Gi
+    # Nota: Sin bloque 'affinity' para permitir ejecución en un solo nodo KinD
+  haproxy:
+    enabled: true
+    size: 2
+    image: percona/haproxy:2.8.17
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+    # Nota: Sin bloque 'affinity'
+    readinessProbes:
+      initialDelaySeconds: 15
+      timeoutSeconds: 5
+      periodSeconds: 5
