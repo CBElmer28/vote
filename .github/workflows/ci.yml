@@ -49,16 +49,55 @@ jobs:
         run: |
           kubectl create namespace prod-db
           kubectl apply -f k8s/secrets.yaml
-          
+
           # 1. Instalar el Operador de Percona
           kubectl apply -f k8s/percona/percona-operator.yaml -n prod-db
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=percona-xtradb-cluster-operator -n prod-db --timeout=120s
-          
+          kubectl wait --for=condition=ready pod \
+            -l app.kubernetes.io/name=percona-xtradb-cluster-operator \
+            -n prod-db --timeout=120s
+
           # 2. Desplegar el clúster adaptado para CI
           kubectl apply -f k8s/percona/ci-percona.yaml -n prod-db
-          
-          # 3. Aplicar el puente DNS
+
+          # 3. Puente DNS
           kubectl apply -f k8s/db-service.yaml
+
+          # FIX: Esperar el bootstrap de Galera en dos fases.
+          # FASE 1 — El operador crea los 3 StatefulSet pods (pueden tardar en aparecer)
+          echo "⏳ Fase 1: esperando que el Operador cree los 3 pods PXC..."
+          for pod in pxc-0 pxc-1 pxc-2; do
+            intentos=0
+            until kubectl get pod votesystem-db-${pod} -n prod-db &>/dev/null; do
+              [ $intentos -ge 36 ] && {
+                echo "❌ TIMEOUT: votesystem-db-${pod} nunca fue creado (6 min)."
+                kubectl get pods -n prod-db
+                kubectl describe statefulset votesystem-db-pxc -n prod-db || true
+                exit 1
+              }
+              echo "  votesystem-db-${pod} aún no existe... ($((intentos * 10))s / 360s)"
+              sleep 10; intentos=$((intentos + 1))
+            done
+            echo "  ✅ votesystem-db-${pod} creado."
+          done
+
+          # FASE 2 — Esperar a que cada nodo pase la startupProbe + readinessProbe.
+          # PXC necesita quórum para que pxc-0 sea Primary; los 3 deben estar Ready juntos.
+          echo "⏳ Fase 2: esperando quórum Galera (hasta 8 minutos)..."
+          kubectl wait --for=condition=ready pod/votesystem-db-pxc-0 \
+            -n prod-db --timeout=480s
+          kubectl wait --for=condition=ready pod/votesystem-db-pxc-1 \
+            -n prod-db --timeout=120s
+          kubectl wait --for=condition=ready pod/votesystem-db-pxc-2 \
+            -n prod-db --timeout=120s
+
+          echo "✅ Clúster PXC con quórum Galera establecido."
+
+          echo "⏳ Esperando al balanceador HAProxy..."
+          kubectl wait --for=condition=ready pod \
+            -l app.kubernetes.io/component=haproxy \
+            -n prod-db --timeout=120s
+
+          echo "✅ Infraestructura DB lista."
 
       - name: 🚀 Desplegar Microservicios y Gateway
         run: |
@@ -69,32 +108,6 @@ jobs:
           kubectl apply -f k8s/ms-analisis.yaml
           kubectl apply -f k8s/gateway.yaml
           kubectl apply -f k8s/frontend.yaml
-          
-          echo "Dando tiempo al Operador Percona para orquestar el clúster..."
-          
-          # BUCLE INTELIGENTE CON TIMEOUT Y DEBUG
-          intentos=0
-          while ! kubectl get pod votesystem-db-pxc-2 -n prod-db > /dev/null 2>&1; do
-            if [ $intentos -ge 30 ]; then
-              echo "❌ TIMEOUT: El pod 3 (pxc-2) nunca fue creado."
-              echo "--- ESTADO DE LOS PODS ---"
-              kubectl get pods -n prod-db
-              echo "--- EVENTOS DEL POD 0 (Posible causa del bloqueo) ---"
-              kubectl describe pod votesystem-db-pxc-0 -n prod-db || true
-              echo "--- LOGS DEL POD 0 ---"
-              kubectl logs votesystem-db-pxc-0 -c pxc -n prod-db --tail=50 || true
-              exit 1
-            fi
-            echo "El nodo 3 aún no existe. Reintentando en 10s... ($intentos/30)"
-            sleep 10
-            intentos=$((intentos+1))
-          done
-          
-          echo "¡El nodo 3 existe! Esperando a que el clúster PXC alcance el quórum y esté Ready..."
-          kubectl wait --for=condition=ready pod/votesystem-db-pxc-2 -n prod-db --timeout=300s
-          
-          echo "Esperando al balanceador HAProxy..."
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=haproxy -n prod-db --timeout=120s
           
           echo "Esperando microservicios y gateway..."
           kubectl wait --for=condition=ready pod -l app=gateway --timeout=120s
