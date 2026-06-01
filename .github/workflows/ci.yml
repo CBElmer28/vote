@@ -75,7 +75,7 @@ jobs:
           # BUCLE INTELIGENTE CON TIMEOUT Y DEBUG
           intentos=0
           while ! kubectl get pod votesystem-db-pxc-2 -n prod-db > /dev/null 2>&1; do
-            if [ $intentos -ge 18 ]; then
+            if [ $intentos -ge 30 ]; then
               echo "❌ TIMEOUT: El pod 3 (pxc-2) nunca fue creado."
               echo "--- ESTADO DE LOS PODS ---"
               kubectl get pods -n prod-db
@@ -85,7 +85,7 @@ jobs:
               kubectl logs votesystem-db-pxc-0 -c pxc -n prod-db --tail=50 || true
               exit 1
             fi
-            echo "El nodo 3 aún no existe. Reintentando en 10s... ($intentos/18)"
+            echo "El nodo 3 aún no existe. Reintentando en 10s... ($intentos/30)"
             sleep 10
             intentos=$((intentos+1))
           done
