@@ -9,45 +9,79 @@ spec:
   updateStrategy: SmartUpdate
   upgradeOptions:
     apply: disabled
+
+  # pxcSize y proxySize permiten size:1 sin rechazo del operador
   unsafeFlags:
     tls: true
-    pxcSize: false
+    pxcSize: true
     proxySize: true
+
   tls:
     enabled: false
+
   pxc:
-    size: 3                     
+    # FASE 1: arranca con 1 nodo — bootstrap inmediato, sin deadlock de quórum.
+    # El CI escala a 3 después de que pxc-0 esté Ready (ver ci.yml).
+    size: 1
     image: percona/percona-xtradb-cluster:8.0.32-24.2
+
     configuration: |
       [mysqld]
       performance_schema=off
       innodb_buffer_pool_size=64M
+      # Forzar Galera a cargar su provider real y a hacer bootstrap de nodo único.
+      # Sin estas líneas el entrypoint detecta grastate.dat vacío y arranca
+      # con wsrep_provider=none (modo standalone), lo que impide que el puerto
+      # 33062 (admin port) abra y el readiness-check.sh falle siempre.
+      wsrep_provider=/usr/lib/galera4/libgalera_smm.so
+      wsrep_cluster_address=gcomm://
+      wsrep_cluster_name=votesystem-pxc
+      wsrep_sst_method=xtrabackup-v2
+
     resources:
       requests:
-        cpu: "200m"
-        memory: "400Mi"
+        cpu: "300m"
+        memory: "500Mi"
       limits:
-        cpu: "600m"
-        memory: "700Mi"
+        cpu: "700m"
+        memory: "800Mi"
+
     volumeSpec:
       persistentVolumeClaim:
         resources:
           requests:
             storage: 2Gi
 
+    # Con size:1 Galera hace bootstrap en ~20-40s.
+    # initialDelaySeconds amplio para absorber variaciones del runner de GitHub.
+    readinessProbes:
+      initialDelaySeconds: 60
+      timeoutSeconds: 15
+      periodSeconds: 15
+      failureThreshold: 20    # ventana total: 60s + (20×15s) = 5 min
+
+    # liveness SIEMPRE debe superar el tiempo máximo del readiness
+    # para que K8s no mate el pod mientras Galera está en bootstrap:
+    # 60 + (20×15) = 360s → ponemos 420s de margen seguro
+    livenessProbes:
+      initialDelaySeconds: 420
+      timeoutSeconds: 15
+      periodSeconds: 10
+      failureThreshold: 5
+
   haproxy:
     enabled: true
-    size: 2
+    size: 1    # se escala a 2 junto con pxc en el CI
     image: percona/haproxy:2.8.17
     resources:
       requests:
         cpu: "50m"
         memory: "64Mi"
       limits:
-        cpu: "100m"
+        cpu: "150m"
         memory: "128Mi"
     readinessProbes:
-      initialDelaySeconds: 30    # HAProxy necesita que PXC esté Ready primero
+      initialDelaySeconds: 20
       timeoutSeconds: 5
       periodSeconds: 5
-      failureThreshold: 10
+      failureThreshold: 12
