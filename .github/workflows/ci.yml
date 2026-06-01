@@ -160,7 +160,7 @@ jobs:
               echo "❌ ${name} no llegó a Ready. Debug:"
               kubectl get pods -n prod-db
               kubectl describe pod ${name} -n prod-db | grep -A 25 "Events:"
-              kubectl logs ${name} -c pxc -n prod-db --tail=50 || true
+              kubectl logs ${name} -c pxc -n prod-db --tail=200 || true
               exit 1
             fi
             echo "  ✅ ${name} Ready."
