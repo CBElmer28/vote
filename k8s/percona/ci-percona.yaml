@@ -16,13 +16,14 @@ spec:
   tls:
     enabled: false
   pxc:
-    size: 3
+    size: 1                      
     image: percona/percona-xtradb-cluster:8.0.32-24.2
     configuration: |
       [mysqld]
       performance_schema=off
       innodb_buffer_pool_size=64M
       admin_address=0.0.0.0
+      admin_port=33062   
     resources:
       requests:
         cpu: "200m"
