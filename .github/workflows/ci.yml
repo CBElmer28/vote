@@ -48,6 +48,7 @@ jobs:
       - name: 🚀 Desplegar Infraestructura de Base de Datos (PXC)
         run: |
           kubectl create namespace prod-db
+          # Asegúrate de aplicar secrets en el namespace correcto
           kubectl apply -f k8s/secrets.yaml -n prod-db
           kubectl apply -f k8s/percona/percona-operator.yaml -n prod-db
           kubectl wait --for=condition=ready pod \
@@ -63,11 +64,15 @@ jobs:
             sleep 5
           done
           
-          if ! kubectl wait --for=condition=ready pod/votesystem-db-pxc-0 \
-            -n prod-db --timeout=180s; then
-            echo "❌ pxc-0 failed to become ready. Debugging info:"
-            kubectl describe pod votesystem-db-pxc-0 -n prod-db
-            kubectl logs votesystem-db-pxc-0 -n prod-db -c mysql || true
+          # VALIDACIÓN FASE 1 CON LOGS DE AUTOPSIA
+          if ! kubectl wait --for=condition=ready pod/votesystem-db-pxc-0 -n prod-db --timeout=180s; then
+            echo "❌ TIMEOUT: pxc-0 nunca alcanzó el estado Ready. Debugging info:"
+            echo "--- ESTADO DE LOS PODS ---"
+            kubectl get pods -n prod-db
+            echo "--- EVENTOS DEL POD pxc-0 ---"
+            kubectl describe pod votesystem-db-pxc-0 -n prod-db | grep -A 20 "Events:" || true
+            echo "--- LOGS DEL POD pxc-0 ---"
+            kubectl logs votesystem-db-pxc-0 -c pxc -n prod-db --tail=50 || true
             exit 1
           fi
           echo "✅ pxc-0 Ready."
@@ -85,10 +90,16 @@ jobs:
             until kubectl get pod votesystem-db-${pod} -n prod-db &>/dev/null; do
               sleep 5
             done
-            kubectl wait --for=condition=ready pod/votesystem-db-${pod} \
-              -n prod-db --timeout=300s; then
-              echo "❌ ${pod} failed to become ready."
-              kubectl describe pod votesystem-db-${pod} -n prod-db
+            
+            # VALIDACIÓN FASE 2 CON LOGS DE AUTOPSIA DINÁMICOS
+            if ! kubectl wait --for=condition=ready pod/votesystem-db-${pod} -n prod-db --timeout=300s; then
+              echo "❌ TIMEOUT: ${pod} nunca alcanzó el estado Ready. Debugging info:"
+              echo "--- ESTADO DE LOS PODS ---"
+              kubectl get pods -n prod-db
+              echo "--- EVENTOS DEL POD ${pod} ---"
+              kubectl describe pod votesystem-db-${pod} -n prod-db | grep -A 20 "Events:" || true
+              echo "--- LOGS DEL POD ${pod} ---"
+              kubectl logs votesystem-db-${pod} -c pxc -n prod-db --tail=50 || true
               exit 1
             fi
             echo "  ✅ votesystem-db-${pod} Ready."
@@ -100,7 +111,6 @@ jobs:
             -n prod-db --timeout=120s
 
           echo "✅ Clúster PXC 3 nodos listo para recovery tests."
-
       - name: 🚀 Desplegar Microservicios y Gateway
         run: |
           kubectl apply -f k8s/ms-usuarios.yaml
