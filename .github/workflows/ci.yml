@@ -1,64 +1,127 @@
-name: Full-Stack CI Pipeline
+name: K8s E2E Chaos Engineering
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ "main", "develop", "alternative" ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ "main", "develop", "alternative" ]
 
 jobs:
-  test:
-    name: Full-Stack Test Suite
+  build-deploy-test:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Code
+      - name: 📥 Descargar código
         uses: actions/checkout@v4
 
-      - name: Set up Docker Compose
-        run: |
-          docker compose up -d
-          echo "Waiting 15 seconds for services and database to initialize..."
-          sleep 15
-
-      - name: Set up Python
+      - name: 🐍 Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
 
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-test.txt
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: ☸️ Crear clúster efímero de Kubernetes (KinD)
+        uses: helm/kind-action@v1.10.0
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          cluster_name: ci-cluster
 
-      - name: Install Frontend Dependencies & Playwright
+      - name: 🐳 Construir imágenes Docker
         run: |
-          cd frontend
-          npm ci
-          npx playwright install --with-deps chromium
+          echo "Construyendo microservicios..."
+          docker build -t votesystem-frontend:latest ./frontend
+          docker build -t votesystem-gateway:latest ./services/gateway
+          docker build -t votesystem-ms-usuarios:latest ./services/ms_usuarios
+          docker build -t votesystem-ms-votacion:latest ./services/ms_votacion
+          docker build -t votesystem-ms-biometrico:latest ./services/ms_biometrico
+          docker build -t votesystem-ms-analisis:latest ./services/ms_analisis
+          docker build -t votesystem-ms-candidatos:latest ./services/ms_candidatos
 
-      - name: Run Orchestrated Full-Stack Tests
+      - name: 📦 Cargar imágenes dentro del clúster KinD
         run: |
-          # Create an empty .env file to prevent warning outputs if not checked in
-          touch .env
+          echo "Inyectando imágenes al containerd de KinD..."
+          kind load docker-image votesystem-frontend:latest --name ci-cluster
+          kind load docker-image votesystem-gateway:latest --name ci-cluster
+          kind load docker-image votesystem-ms-usuarios:latest --name ci-cluster
+          kind load docker-image votesystem-ms-votacion:latest --name ci-cluster
+          kind load docker-image votesystem-ms-biometrico:latest --name ci-cluster
+          kind load docker-image votesystem-ms-analisis:latest --name ci-cluster
+          kind load docker-image votesystem-ms-candidatos:latest --name ci-cluster
+
+      - name: 🚀 Desplegar Infraestructura de Base de Datos (PXC)
+        run: |
+          kubectl create namespace prod-db
+          kubectl apply -f k8s/secrets.yaml
+          
+          # 1. Instalar el Operador de Percona
+          kubectl apply -f k8s/percona/percona-operator.yaml -n prod-db
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=percona-xtradb-cluster-operator -n prod-db --timeout=120s
+          
+          # 2. Desplegar el clúster adaptado para CI
+          kubectl apply -f k8s/percona/ci-percona.yaml -n prod-db
+          
+          # 3. Aplicar el puente DNS
+          kubectl apply -f k8s/db-service.yaml
+
+      - name: 🚀 Desplegar Microservicios y Gateway
+        run: |
+          kubectl apply -f k8s/ms-usuarios.yaml
+          kubectl apply -f k8s/ms-biometrico.yaml
+          kubectl apply -f k8s/ms-candidatos.yaml
+          kubectl apply -f k8s/ms-votacion.yaml
+          kubectl apply -f k8s/ms-analisis.yaml
+          kubectl apply -f k8s/gateway.yaml
+          kubectl apply -f k8s/frontend.yaml
+          
+          echo "Esperando a que el clúster PXC alcance el quórum (3 nodos)..."
+          kubectl wait --for=condition=ready pod/votesystem-db-pxc-2 -n prod-db --timeout=400s
+          
+          echo "Esperando a que el balanceador HAProxy esté listo..."
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=haproxy -n prod-db --timeout=120s
+          
+          echo "Esperando a que los microservicios y el gateway estén operativos..."
+          kubectl wait --for=condition=ready pod -l app=gateway --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=ms-votacion --timeout=120s
+
+      - name: 🔌 Inicializar Port-Forwarding
+        run: |
+          kubectl port-forward svc/gateway-service 80:80 > /dev/null 2>&1 &
+          sleep 5
+          # Verificación rápida
+          curl -I http://localhost:80/api/usuarios/health || echo "Gateway no responde"
+
+      - name: 🧪 Ejecutar Orquestador de Pruebas (Full Suite)
+        run: |
+          # Asegurar dependencias de prueba
+          pip install -r requirements-test.txt
+          
+          # Dependencias de frontend
+          cd frontend && npm ci && npx playwright install chromium --with-deps && cd ..
+          
+          # Ejecutar orquestador
           python run_tests_and_report.py
 
-      - name: Send Test Report to n8n Webhook
+      - name: 📊 Subir Reportes a GitHub
         if: always()
-        env:
-          N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-stack-test-reports
+          path: |
+            test_report.json
+            test_report.csv
+            
+      - name: 📡 Enviar Reporte CSV a AWS n8n
+        if: always() # Garantiza que se envíe incluso si fallaron algunos tests
         run: |
-          if [ -z "$N8N_WEBHOOK_URL" ]; then
-            echo "Warning: N8N_WEBHOOK_URL secret is not set. Skipping report upload."
+          echo "Enviando test_report.csv a n8n en AWS..."
+          
+          # Utilizamos curl para hacer un POST multipart/form-data
+          # Pasamos el archivo directamente con el prefijo '@'
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            -F "file=@test_report.csv" \
+            -H "Authorization: Bearer ${{ secrets.N8N_WEBHOOK_SECRET }}" \
+            https://n8n.elmerdev.com/webhook-test/414d9481-3616-4783-b6c3-33703f2d4488)
+          
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "✅ Reporte enviado exitosamente a n8n."
           else
-            echo "Sending full-stack test report to n8n..."
-            curl -X POST -H "Content-Type: multipart/form-data" -F "file=@test_report.csv" "$N8N_WEBHOOK_URL"
+            echo "❌ Fallo al enviar el reporte. HTTP Status: $HTTP_STATUS"
+            exit 1
           fi
