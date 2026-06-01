@@ -1,87 +1,187 @@
 name: K8s E2E Chaos Engineering
-
+ 
 on:
   push:
     branches: [ "main", "develop", "alternative" ]
   pull_request:
     branches: [ "main", "develop", "alternative" ]
-
+ 
 jobs:
   build-deploy-test:
     runs-on: ubuntu-latest
     steps:
+ 
+      # ─────────────────────────────────────────────────────
+      # 1. CHECKOUT
+      # ─────────────────────────────────────────────────────
       - name: 📥 Descargar código
         uses: actions/checkout@v4
-
+ 
+      # ─────────────────────────────────────────────────────
+      # 2. PYTHON
+      # ─────────────────────────────────────────────────────
       - name: 🐍 Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
+ 
+      # ─────────────────────────────────────────────────────
+      # 3. CLÚSTER KinD
+      # ─────────────────────────────────────────────────────
       - name: ☸️ Crear clúster efímero de Kubernetes (KinD)
         uses: helm/kind-action@v1.10.0
         with:
           cluster_name: ci-cluster
-
+ 
+      # ─────────────────────────────────────────────────────
+      # 4. BUILD DE IMÁGENES DOCKER
+      # ─────────────────────────────────────────────────────
       - name: 🐳 Construir imágenes Docker
         run: |
-          echo "Construyendo microservicios..."
-          docker build -t votesystem-frontend:latest ./frontend
-          docker build -t votesystem-gateway:latest ./services/gateway
-          docker build -t votesystem-ms-usuarios:latest ./services/ms_usuarios
-          docker build -t votesystem-ms-votacion:latest ./services/ms_votacion
-          docker build -t votesystem-ms-biometrico:latest ./services/ms_biometrico
-          docker build -t votesystem-ms-analisis:latest ./services/ms_analisis
-          docker build -t votesystem-ms-candidatos:latest ./services/ms_candidatos
-
-      - name: 📦 Cargar imágenes dentro del clúster KinD
+          docker build -t votesystem-frontend:latest        ./frontend
+          docker build -t votesystem-gateway:latest         ./services/gateway
+          docker build -t votesystem-ms-usuarios:latest     ./services/ms_usuarios
+          docker build -t votesystem-ms-votacion:latest     ./services/ms_votacion
+          docker build -t votesystem-ms-biometrico:latest   ./services/ms_biometrico
+          docker build -t votesystem-ms-analisis:latest     ./services/ms_analisis
+          docker build -t votesystem-ms-candidatos:latest   ./services/ms_candidatos
+ 
+      # ─────────────────────────────────────────────────────
+      # 5. CARGAR IMÁGENES EN KinD
+      # ─────────────────────────────────────────────────────
+      - name: 📦 Cargar imágenes en el clúster KinD
         run: |
-          echo "Inyectando imágenes al containerd de KinD..."
-          kind load docker-image votesystem-frontend:latest --name ci-cluster
-          kind load docker-image votesystem-gateway:latest --name ci-cluster
-          kind load docker-image votesystem-ms-usuarios:latest --name ci-cluster
-          kind load docker-image votesystem-ms-votacion:latest --name ci-cluster
-          kind load docker-image votesystem-ms-biometrico:latest --name ci-cluster
-          kind load docker-image votesystem-ms-analisis:latest --name ci-cluster
-          kind load docker-image votesystem-ms-candidatos:latest --name ci-cluster
-
-      - name: 🚀 Desplegar Infraestructura de Base de Datos (PXC)
+          for img in frontend gateway ms-usuarios ms-votacion ms-biometrico ms-analisis ms-candidatos; do
+            kind load docker-image votesystem-${img}:latest --name ci-cluster
+          done
+ 
+      # ─────────────────────────────────────────────────────
+      # 6. INFRAESTRUCTURA DE BASE DE DATOS — BOOTSTRAP PXC
+      #
+      # Por qué dos fases:
+      #   Un StatefulSet de Kubernetes crea los pods en orden estricto
+      #   (pxc-0 → pxc-1 → pxc-2) y NO crea el siguiente hasta que el
+      #   anterior pasa a Ready. Pero Galera solo marca un nodo como Ready
+      #   (wsrep_local_state = Synced) cuando tiene quórum con sus peers.
+      #   Resultado: deadlock infinito con size:3 desde el inicio.
+      #
+      #   Solución: arrancar con size:1 (bootstrap inmediato sin quórum),
+      #   esperar que pxc-0 sea Primary, y luego escalar a 3.
+      #   En ese momento pxc-1 y pxc-2 se unen vía SST a un nodo que
+      #   ya es Primary y se sincronizan sin bloqueos.
+      # ─────────────────────────────────────────────────────
+      - name: 🚀 Desplegar Infraestructura de Base de Datos (PXC — 2 fases)
         run: |
+          set -euo pipefail
+ 
           kubectl create namespace prod-db
+ 
+          # Secrets DEBEN estar en prod-db (no en default)
           kubectl apply -f k8s/secrets.yaml -n prod-db
+ 
+          # ── Operador Percona ──────────────────────────────────
           kubectl apply -f k8s/percona/percona-operator.yaml -n prod-db
           kubectl wait --for=condition=ready pod \
             -l app.kubernetes.io/name=percona-xtradb-cluster-operator \
             -n prod-db --timeout=120s
-
-          # Desplegar el clúster directamente con 3 nodos
-          kubectl apply -f k8s/percona/ci-percona.yaml -n prod-db
+          echo "✅ Operador Percona listo."
+ 
+          # ── FASE 1: Levantar con size:1 ──────────────────────
+          kubectl apply -f k8s/percona/ci-percona.yaml
           kubectl apply -f k8s/db-service.yaml
-
-          echo "⏳ Esperando a que el Operador haga el bootstrap y sincronice el clúster (puede tardar unos minutos)..."
-          
+ 
+          echo "⏳ Esperando que el operador cree pxc-0..."
+          intentos=0
+          until kubectl get pod votesystem-db-pxc-0 -n prod-db &>/dev/null; do
+            [ $intentos -ge 24 ] && {
+              echo "❌ El operador no creó pxc-0 en 2 minutos."
+              kubectl get pxc -n prod-db -o wide
+              kubectl describe pxc votesystem-db -n prod-db | tail -40
+              exit 1
+            }
+            sleep 5; intentos=$((intentos+1))
+          done
+ 
+          # Validar que Galera cargó el provider real (no 'none').
+          # Si arranca con wsrep_provider=none el puerto 33062 nunca abre
+          # y el readiness-check.sh falla para siempre.
+          echo "⏳ Verificando que Galera cargó libgalera (no 'none')..."
+          intentos=0
+          until kubectl logs votesystem-db-pxc-0 -c pxc -n prod-db 2>/dev/null \
+                | grep -qE "wsrep_load.*libgalera|Galera.*loaded successfully|Primary.*1"; do
+            [ $intentos -ge 30 ] && {
+              echo "❌ Galera no cargó libgalera en 2.5 minutos."
+              echo "--- Últimos logs pxc-0 ---"
+              kubectl logs votesystem-db-pxc-0 -c pxc -n prod-db --tail=40 || true
+              echo "--- ConfigMaps del operador ---"
+              kubectl get configmap -n prod-db
+              kubectl get configmap auto-votesystem-db-pxc -n prod-db -o yaml 2>/dev/null | head -60 || true
+              exit 1
+            }
+            echo "  Galera iniciando... ($((intentos*5))s)"
+            sleep 5; intentos=$((intentos+1))
+          done
+          echo "✅ Galera libgalera cargado."
+ 
+          echo "⏳ Esperando que pxc-0 pase a Ready (hasta 8 min)..."
+          if ! kubectl wait --for=condition=ready pod/votesystem-db-pxc-0 \
+               -n prod-db --timeout=480s; then
+            echo "❌ pxc-0 no llegó a Ready. Debug:"
+            kubectl get pods -n prod-db
+            kubectl describe pod votesystem-db-pxc-0 -n prod-db | grep -A 25 "Events:"
+            kubectl logs votesystem-db-pxc-0 -c pxc -n prod-db --tail=60 || true
+            exit 1
+          fi
+          echo "✅ pxc-0 Ready — nodo Primary Galera activo."
+ 
+          # ── FASE 2: Escalar a 3 para los recovery tests ──────
+          # pxc-0 ya es Primary; pxc-1 y pxc-2 se unen via SST sin deadlock.
+          echo "⏳ Escalando clúster PXC a 3 nodos..."
+          kubectl patch pxc votesystem-db -n prod-db \
+            --type=merge \
+            -p '{"spec":{"pxc":{"size":3},"haproxy":{"size":2}}}'
+ 
           for pod in pxc-0 pxc-1 pxc-2; do
-            echo "  Esperando votesystem-db-${pod}..."
-            until kubectl get pod votesystem-db-${pod} -n prod-db &>/dev/null; do
-              sleep 5
+            name="votesystem-db-${pod}"
+            echo "  Esperando creación de ${name}..."
+            intentos=0
+            until kubectl get pod ${name} -n prod-db &>/dev/null; do
+              [ $intentos -ge 36 ] && {
+                echo "❌ ${name} no fue creado en 3 min tras el scale."
+                kubectl get pods -n prod-db
+                kubectl describe statefulset votesystem-db-pxc -n prod-db | tail -20
+                exit 1
+              }
+              sleep 5; intentos=$((intentos+1))
             done
-            
-            if ! kubectl wait --for=condition=ready pod/votesystem-db-${pod} -n prod-db --timeout=300s; then
-              echo "❌ TIMEOUT en ${pod}."
-              kubectl logs votesystem-db-${pod} -c pxc -n prod-db --tail=50 || true
+            echo "  ⏳ ${name} existe, esperando Ready (hasta 5 min)..."
+            if ! kubectl wait --for=condition=ready pod/${name} \
+                 -n prod-db --timeout=300s; then
+              echo "❌ ${name} no llegó a Ready. Debug:"
+              kubectl get pods -n prod-db
+              kubectl describe pod ${name} -n prod-db | grep -A 25 "Events:"
+              kubectl logs ${name} -c pxc -n prod-db --tail=50 || true
               exit 1
             fi
-            echo "  ✅ votesystem-db-${pod} Ready."
+            echo "  ✅ ${name} Ready."
           done
-
-          echo "⏳ Esperando HAProxy..."
+ 
+          echo "⏳ Esperando HAProxy (2 réplicas)..."
           kubectl wait --for=condition=ready pod \
             -l app.kubernetes.io/component=haproxy \
             -n prod-db --timeout=120s
-
-          echo "✅ Clúster PXC 3 nodos listo."
+ 
+          echo ""
+          echo "✅ Clúster PXC 3 nodos + HAProxy listos para los recovery tests."
+          kubectl get pods -n prod-db
+ 
+      # ─────────────────────────────────────────────────────
+      # 7. MICROSERVICIOS Y GATEWAY
+      # ─────────────────────────────────────────────────────
       - name: 🚀 Desplegar Microservicios y Gateway
         run: |
+          set -euo pipefail
+ 
           kubectl apply -f k8s/ms-usuarios.yaml
           kubectl apply -f k8s/ms-biometrico.yaml
           kubectl apply -f k8s/ms-candidatos.yaml
@@ -89,29 +189,51 @@ jobs:
           kubectl apply -f k8s/ms-analisis.yaml
           kubectl apply -f k8s/gateway.yaml
           kubectl apply -f k8s/frontend.yaml
-          
-          echo "Esperando microservicios y gateway..."
-          kubectl wait --for=condition=ready pod -l app=gateway --timeout=120s
-          kubectl wait --for=condition=ready pod -l app=ms-votacion --timeout=120s
-          
+ 
+          echo "⏳ Esperando microservicios críticos..."
+          kubectl wait --for=condition=ready pod -l app=gateway      --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=ms-votacion  --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=ms-usuarios  --timeout=120s
+          echo "✅ Microservicios listos."
+ 
+      # ─────────────────────────────────────────────────────
+      # 8. PORT-FORWARDING
+      # ─────────────────────────────────────────────────────
       - name: 🔌 Inicializar Port-Forwarding
         run: |
-          kubectl port-forward svc/gateway-service 80:80 > /dev/null 2>&1 &
-          sleep 5
-          # Verificación rápida
-          curl -I http://localhost:80/api/usuarios/health || echo "Gateway no responde"
-
+          set -euo pipefail
+ 
+          kubectl port-forward svc/gateway-service 80:80 &>/dev/null &
+          PF_PID=$!
+          echo "PF_PID=${PF_PID}" >> "$GITHUB_ENV"
+ 
+          # Esperar a que el puerto esté disponible (máx 30s)
+          intentos=0
+          until curl -sf http://localhost:80/api/usuarios/health &>/dev/null; do
+            [ $intentos -ge 6 ] && {
+              echo "⚠️ Gateway no responde en /api/usuarios/health — continuando de todas formas."
+              break
+            }
+            sleep 5; intentos=$((intentos+1))
+          done
+          echo "✅ Port-forwarding activo (PID=${PF_PID})."
+ 
+      # ─────────────────────────────────────────────────────
+      # 9. SUITE COMPLETA DE TESTS
+      # ─────────────────────────────────────────────────────
       - name: 🧪 Ejecutar Orquestador de Pruebas (Full Suite)
         run: |
-          # Asegurar dependencias de prueba
+          set -euo pipefail
+ 
           pip install -r requirements-test.txt
-          
-          # Dependencias de frontend
+ 
           cd frontend && npm ci && npx playwright install chromium --with-deps && cd ..
-          
-          # Ejecutar orquestador
+ 
           python run_tests_and_report.py
-
+ 
+      # ─────────────────────────────────────────────────────
+      # 10. ARTEFACTOS
+      # ─────────────────────────────────────────────────────
       - name: 📊 Subir Reportes a GitHub
         if: always()
         uses: actions/upload-artifact@v4
@@ -120,22 +242,25 @@ jobs:
           path: |
             test_report.json
             test_report.csv
-            
+ 
+      # ─────────────────────────────────────────────────────
+      # 11. ENVÍO A n8n
+      # ─────────────────────────────────────────────────────
       - name: 📡 Enviar Reporte CSV a AWS n8n
-        if: always() # Garantiza que se envíe incluso si fallaron algunos tests
+        if: always()
         run: |
-          echo "Enviando test_report.csv a n8n en AWS..."
-          
-          # Utilizamos curl para hacer un POST multipart/form-data
-          # Pasamos el archivo directamente con el prefijo '@'
+          set -euo pipefail
+ 
+          echo "Enviando test_report.csv a n8n..."
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
             -F "file=@test_report.csv" \
             -H "Authorization: Bearer ${{ secrets.N8N_WEBHOOK_SECRET }}" \
             https://n8n.elmerdev.com/webhook-test/414d9481-3616-4783-b6c3-33703f2d4488)
-          
+ 
           if [ "$HTTP_STATUS" -eq 200 ]; then
-            echo "✅ Reporte enviado exitosamente a n8n."
+            echo "✅ Reporte enviado exitosamente (HTTP 200)."
           else
             echo "❌ Fallo al enviar el reporte. HTTP Status: $HTTP_STATUS"
             exit 1
           fi
+ 
