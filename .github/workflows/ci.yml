@@ -49,55 +49,47 @@ jobs:
         run: |
           kubectl create namespace prod-db
           kubectl apply -f k8s/secrets.yaml
-
-          # 1. Instalar el Operador de Percona
           kubectl apply -f k8s/percona/percona-operator.yaml -n prod-db
           kubectl wait --for=condition=ready pod \
             -l app.kubernetes.io/name=percona-xtradb-cluster-operator \
             -n prod-db --timeout=120s
 
-          # 2. Desplegar el clúster adaptado para CI
+          # FASE 1: Arrancar con size:1 — bootstrap inmediato sin deadlock de quórum
           kubectl apply -f k8s/percona/ci-percona.yaml -n prod-db
-
-          # 3. Puente DNS
           kubectl apply -f k8s/db-service.yaml
 
-          # FIX: Esperar el bootstrap de Galera en dos fases.
-          # FASE 1 — El operador crea los 3 StatefulSet pods (pueden tardar en aparecer)
-          echo "⏳ Fase 1: esperando que el Operador cree los 3 pods PXC..."
+          echo "⏳ Esperando bootstrap del nodo primario (pxc-0)..."
+          until kubectl get pod votesystem-db-pxc-0 -n prod-db &>/dev/null; do
+            sleep 5
+          done
+          kubectl wait --for=condition=ready pod/votesystem-db-pxc-0 \
+            -n prod-db --timeout=180s
+          echo "✅ pxc-0 Ready."
+
+          # FASE 2: Escalar a 3 — ahora pxc-0 ya es Primary, los nuevos nodos
+          # se unen por SST sin necesidad de quórum adicional
+          echo "⏳ Escalando clúster PXC a 3 nodos para los recovery tests..."
+          kubectl patch pxc votesystem-db -n prod-db \
+            --type=merge \
+            -p '{"spec":{"pxc":{"size":3},"haproxy":{"size":2}}}'
+
+          # Esperar los 3 pods secuencialmente (StatefulSet los crea en orden)
           for pod in pxc-0 pxc-1 pxc-2; do
-            intentos=0
+            echo "  Esperando votesystem-db-${pod}..."
             until kubectl get pod votesystem-db-${pod} -n prod-db &>/dev/null; do
-              [ $intentos -ge 36 ] && {
-                echo "❌ TIMEOUT: votesystem-db-${pod} nunca fue creado (6 min)."
-                kubectl get pods -n prod-db
-                kubectl describe statefulset votesystem-db-pxc -n prod-db || true
-                exit 1
-              }
-              echo "  votesystem-db-${pod} aún no existe... ($((intentos * 10))s / 360s)"
-              sleep 10; intentos=$((intentos + 1))
+              sleep 5
             done
-            echo "  ✅ votesystem-db-${pod} creado."
+            kubectl wait --for=condition=ready pod/votesystem-db-${pod} \
+              -n prod-db --timeout=300s
+            echo "  ✅ votesystem-db-${pod} Ready."
           done
 
-          # FASE 2 — Esperar a que cada nodo pase la startupProbe + readinessProbe.
-          # PXC necesita quórum para que pxc-0 sea Primary; los 3 deben estar Ready juntos.
-          echo "⏳ Fase 2: esperando quórum Galera (hasta 8 minutos)..."
-          kubectl wait --for=condition=ready pod/votesystem-db-pxc-0 \
-            -n prod-db --timeout=480s
-          kubectl wait --for=condition=ready pod/votesystem-db-pxc-1 \
-            -n prod-db --timeout=120s
-          kubectl wait --for=condition=ready pod/votesystem-db-pxc-2 \
-            -n prod-db --timeout=120s
-
-          echo "✅ Clúster PXC con quórum Galera establecido."
-
-          echo "⏳ Esperando al balanceador HAProxy..."
+          echo "⏳ Esperando HAProxy..."
           kubectl wait --for=condition=ready pod \
             -l app.kubernetes.io/component=haproxy \
             -n prod-db --timeout=120s
 
-          echo "✅ Infraestructura DB lista."
+          echo "✅ Clúster PXC 3 nodos listo para recovery tests."
 
       - name: 🚀 Desplegar Microservicios y Gateway
         run: |
