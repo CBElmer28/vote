@@ -48,7 +48,7 @@ jobs:
       - name: 🚀 Desplegar Infraestructura de Base de Datos (PXC)
         run: |
           kubectl create namespace prod-db
-          kubectl apply -f k8s/secrets.yaml
+          kubectl apply -f k8s/secrets.yaml -n prod-db
           kubectl apply -f k8s/percona/percona-operator.yaml -n prod-db
           kubectl wait --for=condition=ready pod \
             -l app.kubernetes.io/name=percona-xtradb-cluster-operator \
@@ -62,8 +62,14 @@ jobs:
           until kubectl get pod votesystem-db-pxc-0 -n prod-db &>/dev/null; do
             sleep 5
           done
-          kubectl wait --for=condition=ready pod/votesystem-db-pxc-0 \
-            -n prod-db --timeout=180s
+          
+          if ! kubectl wait --for=condition=ready pod/votesystem-db-pxc-0 \
+            -n prod-db --timeout=180s; then
+            echo "❌ pxc-0 failed to become ready. Debugging info:"
+            kubectl describe pod votesystem-db-pxc-0 -n prod-db
+            kubectl logs votesystem-db-pxc-0 -n prod-db -c mysql || true
+            exit 1
+          fi
           echo "✅ pxc-0 Ready."
 
           # FASE 2: Escalar a 3 — ahora pxc-0 ya es Primary, los nuevos nodos
@@ -80,7 +86,11 @@ jobs:
               sleep 5
             done
             kubectl wait --for=condition=ready pod/votesystem-db-${pod} \
-              -n prod-db --timeout=300s
+              -n prod-db --timeout=300s; then
+              echo "❌ ${pod} failed to become ready."
+              kubectl describe pod votesystem-db-${pod} -n prod-db
+              exit 1
+            fi
             echo "  ✅ votesystem-db-${pod} Ready."
           done
 
