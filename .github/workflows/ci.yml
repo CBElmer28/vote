@@ -70,7 +70,16 @@ jobs:
           kubectl apply -f k8s/gateway.yaml
           kubectl apply -f k8s/frontend.yaml
           
-          echo "Esperando a que el clúster PXC alcance el quórum (3 nodos)..."
+          echo "Dando tiempo al Operador Percona para orquestar el clúster..."
+          
+          # 1. BUCLE DE ESPERA: Evita el error 'NotFound' esperando a que el pod se registre en K8s
+          while ! kubectl get pod votesystem-db-pxc-2 -n prod-db > /dev/null 2>&1; do
+            echo "El nodo 3 (pxc-2) aún no ha sido creado por el Operador. Reintentando en 10s..."
+            sleep 10
+          done
+          
+          echo "¡El nodo 3 existe! Esperando a que el clúster PXC alcance el quórum y esté Ready..."
+          # 2. ESPERA DE ESTADO: Ahora sí esperamos de forma segura
           kubectl wait --for=condition=ready pod/votesystem-db-pxc-2 -n prod-db --timeout=400s
           
           echo "Esperando a que el balanceador HAProxy esté listo..."
@@ -79,7 +88,6 @@ jobs:
           echo "Esperando a que los microservicios y el gateway estén operativos..."
           kubectl wait --for=condition=ready pod -l app=gateway --timeout=120s
           kubectl wait --for=condition=ready pod -l app=ms-votacion --timeout=120s
-
       - name: 🔌 Inicializar Port-Forwarding
         run: |
           kubectl port-forward svc/gateway-service 80:80 > /dev/null 2>&1 &
