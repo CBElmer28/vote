@@ -72,22 +72,34 @@ jobs:
           
           echo "Dando tiempo al Operador Percona para orquestar el clúster..."
           
-          # 1. BUCLE DE ESPERA: Evita el error 'NotFound' esperando a que el pod se registre en K8s
+          # BUCLE INTELIGENTE CON TIMEOUT Y DEBUG
+          intentos=0
           while ! kubectl get pod votesystem-db-pxc-2 -n prod-db > /dev/null 2>&1; do
-            echo "El nodo 3 (pxc-2) aún no ha sido creado por el Operador. Reintentando en 10s..."
+            if [ $intentos -ge 18 ]; then
+              echo "❌ TIMEOUT: El pod 3 (pxc-2) nunca fue creado."
+              echo "--- ESTADO DE LOS PODS ---"
+              kubectl get pods -n prod-db
+              echo "--- EVENTOS DEL POD 0 (Posible causa del bloqueo) ---"
+              kubectl describe pod votesystem-db-pxc-0 -n prod-db || true
+              echo "--- LOGS DEL POD 0 ---"
+              kubectl logs votesystem-db-pxc-0 -c pxc -n prod-db --tail=50 || true
+              exit 1
+            fi
+            echo "El nodo 3 aún no existe. Reintentando en 10s... ($intentos/18)"
             sleep 10
+            intentos=$((intentos+1))
           done
           
           echo "¡El nodo 3 existe! Esperando a que el clúster PXC alcance el quórum y esté Ready..."
-          # 2. ESPERA DE ESTADO: Ahora sí esperamos de forma segura
-          kubectl wait --for=condition=ready pod/votesystem-db-pxc-2 -n prod-db --timeout=400s
+          kubectl wait --for=condition=ready pod/votesystem-db-pxc-2 -n prod-db --timeout=300s
           
-          echo "Esperando a que el balanceador HAProxy esté listo..."
+          echo "Esperando al balanceador HAProxy..."
           kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=haproxy -n prod-db --timeout=120s
           
-          echo "Esperando a que los microservicios y el gateway estén operativos..."
+          echo "Esperando microservicios y gateway..."
           kubectl wait --for=condition=ready pod -l app=gateway --timeout=120s
           kubectl wait --for=condition=ready pod -l app=ms-votacion --timeout=120s
+          
       - name: 🔌 Inicializar Port-Forwarding
         run: |
           kubectl port-forward svc/gateway-service 80:80 > /dev/null 2>&1 &
