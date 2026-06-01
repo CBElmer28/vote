@@ -112,7 +112,7 @@ jobs:
             [ $intentos -ge 30 ] && {
               echo "❌ Galera no cargó libgalera en 2.5 minutos."
               echo "--- Últimos logs pxc-0 ---"
-              kubectl logs votesystem-db-pxc-0 -c pxc -n prod-db --tail=40 || true
+              kubectl logs votesystem-db-pxc-0 -c pxc -n prod-db --tail=100 || true
               echo "--- ConfigMaps del operador ---"
               kubectl get configmap -n prod-db
               kubectl get configmap auto-votesystem-db-pxc -n prod-db -o yaml 2>/dev/null | head -60 || true
@@ -129,7 +129,7 @@ jobs:
             echo "❌ pxc-0 no llegó a Ready. Debug:"
             kubectl get pods -n prod-db
             kubectl describe pod votesystem-db-pxc-0 -n prod-db | grep -A 25 "Events:"
-            kubectl logs votesystem-db-pxc-0 -c pxc -n prod-db --tail=60 || true
+            kubectl logs votesystem-db-pxc-0 -c pxc -n prod-db --tail=100 || true
             exit 1
           fi
           echo "✅ pxc-0 Ready — nodo Primary Galera activo."
