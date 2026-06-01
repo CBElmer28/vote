@@ -6,8 +6,13 @@ metadata:
 spec:
   crVersion: 1.19.1
   secretsName: mysql-secrets
+  updateStrategy: SmartUpdate
+  upgradeOptions:
+    apply: disabled
   unsafeFlags:
     tls: true
+    pxcSize: true
+    proxySize: true
   tls:
     enabled: false
   pxc:
@@ -19,10 +24,12 @@ spec:
       innodb_buffer_pool_size=128M
       admin_address=0.0.0.0
       admin_port=33062
+      # Reducir timeouts de Galera para bootstrap más rápido en CI
+      wsrep_provider_options="evs.suspect_timeout=PT10S;evs.inactive_timeout=PT30S;evs.install_timeout=PT15S"
     resources:
       requests:
         cpu: "300m"
-        memory: "500Mi" 
+        memory: "500Mi"
       limits:
         cpu: "700m"
         memory: "800Mi"
@@ -31,7 +38,27 @@ spec:
         resources:
           requests:
             storage: 2Gi
-    # Nota: Sin bloque 'affinity' para permitir ejecución en un solo nodo KinD
+    # FIX CRÍTICO: startupProbe separado con ventana amplia para el bootstrap de Galera.
+    # El readinessProbe original arrancaba a los 15s y mataba el nodo antes de que
+    # pudiera establecer quórum con sus peers.
+    startupProbe:
+      exec:
+        command:
+          - /var/lib/mysql/readiness-check.sh
+      initialDelaySeconds: 60    # Galera necesita tiempo para negociar el primary component
+      periodSeconds: 10
+      failureThreshold: 30       # 60s + (30 * 10s) = hasta 5 min para bootstrap inicial
+      timeoutSeconds: 15
+    readinessProbes:
+      initialDelaySeconds: 0     # startupProbe ya garantiza que MySQL está listo
+      timeoutSeconds: 15
+      periodSeconds: 30
+      failureThreshold: 5
+    livenessProbes:
+      initialDelaySeconds: 300
+      timeoutSeconds: 5
+      periodSeconds: 10
+      failureThreshold: 3
   haproxy:
     enabled: true
     size: 2
@@ -43,8 +70,8 @@ spec:
       limits:
         cpu: "100m"
         memory: "128Mi"
-    # Nota: Sin bloque 'affinity'
     readinessProbes:
-      initialDelaySeconds: 15
+      initialDelaySeconds: 30    # HAProxy necesita que PXC esté Ready primero
       timeoutSeconds: 5
       periodSeconds: 5
+      failureThreshold: 10
