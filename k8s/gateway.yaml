@@ -20,6 +20,8 @@ data:
 
         client_max_body_size 20M;
 
+        proxy_cache_path /tmp/nginx_cache levels=1:2 keys_zone=candidate_cache:10m max_size=100m inactive=60m use_temp_path=off;
+
         access_log /var/log/nginx/access.log;
         error_log /var/log/nginx/error.log;
 
@@ -63,6 +65,12 @@ data:
 
             # MS Candidatos
             location /api/candidatos {
+                proxy_cache candidate_cache;
+                proxy_cache_valid 200 10s;
+                proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+                proxy_cache_lock on;
+                add_header X-Cache-Status $upstream_cache_status;
+
                 proxy_pass http://ms-candidatos:5005;
             }
 

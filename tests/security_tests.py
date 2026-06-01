@@ -5,7 +5,7 @@ import time
 import sys
 
 # Constantes
-API_GATEWAY = "http://127.0.0.1:80"
+API_GATEWAY = "http://localhost:80"
 
 class Colors:
     GREEN = '\033[92m'
@@ -26,9 +26,10 @@ def run_security_tests():
     endpoint_login = f"{API_GATEWAY}/api/usuarios/auth/login"
     
     # El limite en el controlador es "10 per minute"
-    # Haremos 12 peticiones rapidas para disparar el 429
+    # Dado que ms-usuarios esta escalado a 3 replicas con limitador in-memory,
+    # incrementamos a 35 peticiones para forzar a que al menos una replica alcance el limite (10) y retorne 429.
     rate_limit_triggered = False
-    for i in range(12):
+    for i in range(35):
         res = requests.post(endpoint_login, json={"dni": "00000000"})
         if res.status_code == 429:
             log(f"  - Peticion {i+1}: Bloqueada por Rate Limit (429).")
