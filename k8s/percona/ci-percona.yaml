@@ -11,15 +11,15 @@ spec:
   tls:
     enabled: false
   pxc:
-      size: 3
-      image: percona/percona-xtradb-cluster:8.0.32-24.2
-      resources:
-        requests:
-          cpu: "200m"
-          memory: "450Mi" 
-        limits:
-          cpu: "400m"
-          memory: "600Mi"
+    size: 3
+    image: percona/percona-xtradb-cluster:8.0.32-24.2
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "450Mi" 
+      limits:
+        cpu: "400m"
+        memory: "600Mi"
     volumeSpec:
       persistentVolumeClaim:
         resources:
