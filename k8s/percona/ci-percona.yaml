@@ -9,22 +9,22 @@ spec:
   updateStrategy: SmartUpdate
   upgradeOptions:
     apply: disabled
-
+ 
   # pxcSize y proxySize permiten size:1 sin rechazo del operador
   unsafeFlags:
     tls: true
     pxcSize: true
     proxySize: true
-
+ 
   tls:
     enabled: false
-
+ 
   pxc:
     # FASE 1: arranca con 1 nodo — bootstrap inmediato, sin deadlock de quórum.
     # El CI escala a 3 después de que pxc-0 esté Ready (ver ci.yml).
     size: 1
     image: percona/percona-xtradb-cluster:8.0.32-24.2
-
+ 
     configuration: |
       [mysqld]
       performance_schema=off
@@ -37,7 +37,7 @@ spec:
       wsrep_cluster_address=gcomm://
       wsrep_cluster_name=votesystem-pxc
       wsrep_sst_method=xtrabackup-v2
-
+ 
     resources:
       requests:
         cpu: "300m"
@@ -45,13 +45,13 @@ spec:
       limits:
         cpu: "700m"
         memory: "800Mi"
-
+ 
     volumeSpec:
       persistentVolumeClaim:
         resources:
           requests:
             storage: 2Gi
-
+ 
     # Con size:1 Galera hace bootstrap en ~20-40s.
     # initialDelaySeconds amplio para absorber variaciones del runner de GitHub.
     readinessProbes:
@@ -59,7 +59,7 @@ spec:
       timeoutSeconds: 15
       periodSeconds: 15
       failureThreshold: 20    # ventana total: 60s + (20×15s) = 5 min
-
+ 
     # liveness SIEMPRE debe superar el tiempo máximo del readiness
     # para que K8s no mate el pod mientras Galera está en bootstrap:
     # 60 + (20×15) = 360s → ponemos 420s de margen seguro
@@ -68,7 +68,7 @@ spec:
       timeoutSeconds: 15
       periodSeconds: 10
       failureThreshold: 5
-
+ 
   haproxy:
     enabled: true
     size: 1    # se escala a 2 junto con pxc en el CI
