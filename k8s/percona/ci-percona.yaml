@@ -11,19 +11,17 @@ spec:
     apply: disabled
   unsafeFlags:
     tls: true
-    pxcSize: true
+    pxcSize: false
     proxySize: true
   tls:
     enabled: false
   pxc:
-    size: 1                      
+    size: 3                     
     image: percona/percona-xtradb-cluster:8.0.32-24.2
     configuration: |
       [mysqld]
       performance_schema=off
       innodb_buffer_pool_size=64M
-      admin_address=0.0.0.0
-      admin_port=33062   
     resources:
       requests:
         cpu: "200m"
@@ -36,20 +34,7 @@ spec:
         resources:
           requests:
             storage: 2Gi
-    # FIX CRÍTICO: startupProbe separado con ventana amplia para el bootstrap de Galera.
-    # El readinessProbe original arrancaba a los 15s y mataba el nodo antes de que
-    # pudiera establecer quórum con sus peers.
-    readinessProbes:
-      initialDelaySeconds: 60    # Da 1 minuto entero de gracia antes del primer chequeo
-      timeoutSeconds: 15
-      periodSeconds: 15
-      failureThreshold: 30       # 30 fallos * 10s = 5 minutos extra de tolerancia para el bootstrap
-      
-    livenessProbes:
-      initialDelaySeconds: 400   # 5 minutos intocable para evitar que K8s lo mate mientras busca quórum
-      timeoutSeconds: 15
-      periodSeconds: 10
-      failureThreshold: 5
+
   haproxy:
     enabled: true
     size: 2
