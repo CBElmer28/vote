@@ -13,6 +13,10 @@ spec:
   pxc:
     size: 3
     image: percona/percona-xtradb-cluster:8.0.32-24.2
+    configuration: |
+      [mysqld]
+      performance_schema=off
+      innodb_buffer_pool_size=128M
     resources:
       requests:
         cpu: "200m"
