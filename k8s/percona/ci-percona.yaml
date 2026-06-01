@@ -17,13 +17,15 @@ spec:
       [mysqld]
       performance_schema=off
       innodb_buffer_pool_size=128M
+      admin_address=0.0.0.0
+      admin_port=33062
     resources:
       requests:
-        cpu: "200m"
-        memory: "450Mi" 
+        cpu: "300m"
+        memory: "500Mi" 
       limits:
-        cpu: "400m"
-        memory: "600Mi"
+        cpu: "600m"
+        memory: "800Mi"
     volumeSpec:
       persistentVolumeClaim:
         resources:
