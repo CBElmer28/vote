@@ -74,8 +74,15 @@ jobs:
           kubectl apply -f k8s/percona/percona-cluster.yaml -n prod-db
           kubectl apply -f k8s/db-service.yaml
 
+          # --- NUEVO: Bucle para evadir la Condición de Carrera ---
+          echo "⏳ Dando tiempo al Operador Percona para registrar y crear el primer pod..."
+          until kubectl get pod votesystem-db-pxc-0 -n prod-db &>/dev/null; do
+            sleep 3
+          done
+          # --------------------------------------------------------
+
           echo "⏳ Esperando que el clúster Galera alcance el quórum de 3 nodos (Puede tardar 4-6 mins)..."
-          # Esperamos directamente por todos los nodos, tu PC los levantará en paralelo
+          # Ahora el wait no fallará porque el pod ya existe, simplemente esperará a que esté Ready
           if ! kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=pxc -n prod-db --timeout=600s; then
             echo "❌ Fallo al levantar PXC. Autopsia del pod 0:"
             kubectl describe pod votesystem-db-pxc-0 -n prod-db | grep -A 20 "Events:" || true
@@ -89,7 +96,6 @@ jobs:
             -n prod-db --timeout=120s
 
           echo "✅ Clúster Percona Full listo."
-
       - name: 🚀 Desplegar Microservicios y Gateway
         run: |
           kubectl apply -f k8s/ms-usuarios.yaml
