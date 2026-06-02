@@ -135,7 +135,7 @@ jobs:
             HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
               -F "file=@test_report.csv" \
               -H "Authorization: Bearer ${{ secrets.N8N_WEBHOOK_SECRET }}" \
-              https://n8n.elmerdev.com/webhook-test/414d9481-3616-4783-b6c3-33703f2d4488)
+              https://n8n.elmerdev.com/webhook/414d9481-3616-4783-b6c3-33703f2d4488)
             
             if [ "$HTTP_STATUS" -eq 200 ]; then
               echo "✅ Reporte enviado exitosamente a n8n."
