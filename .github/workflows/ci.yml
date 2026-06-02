@@ -19,13 +19,20 @@ jobs:
       - name: 📥 Descargar código
         uses: actions/checkout@v4
 
+      # NUEVO PASO: Sanity Check para asegurar que el entorno Windows tiene todo
+      - name: 🔍 Verificar Entorno Windows (Fail-Fast)
+        run: |
+          echo "Verificando dependencias en el PATH de Windows..."
+          python --version || { echo "❌ Python no encontrado"; exit 1; }
+          pip --version || { echo "❌ Pip no encontrado"; exit 1; }
+          node --version || { echo "❌ Node no encontrado"; exit 1; }
+          docker --version || { echo "❌ Docker no encontrado"; exit 1; }
+          kind --version || { echo "❌ KinD no encontrado"; exit 1; }
 
       - name: ☸️ Crear clúster efímero de Kubernetes (KinD)
-        # Si este paso falla en Windows, puedes cambiarlo por un comando directo:
-        # run: kind create cluster --name ci-cluster
-        uses: helm/kind-action@v1.10.0
-        with:
-          cluster_name: ci-cluster
+        run: |
+          echo "Creando clúster KinD de forma nativa..."
+          kind create cluster --name ci-cluster
 
       - name: 🐳 Construir imágenes Docker
         run: |
@@ -95,8 +102,9 @@ jobs:
       - name: 🔌 Inicializar Port-Forwarding
         run: |
           kubectl port-forward svc/gateway-service 80:80 > /dev/null 2>&1 &
-          sleep 5
-          curl -I http://localhost:80/api/usuarios/health || echo "Gateway no responde"
+          echo "Esperando estabilización del socket de red..."
+          sleep 10
+          curl -s -I http://localhost:80/api/usuarios/health || echo "⚠️ Gateway no responde en el primer chequeo."
 
       - name: 🧪 Ejecutar Orquestador de Pruebas (Full Suite)
         run: |
@@ -105,7 +113,7 @@ jobs:
           # Evitamos problemas de rutas en Windows con npm y playwright
           cd frontend
           npm ci
-          npx playwright install chromium --with-deps
+          npx playwright install chromium # Retirado --with-deps para evitar warnings en Windows
           cd ..
           
           python run_tests_and_report.py
@@ -145,7 +153,7 @@ jobs:
           kind delete cluster --name ci-cluster || true
           
           echo "Matando Port-Forwarding en Windows..."
-          # Windows usa taskkill en lugar de pkill
+          # Windows usa taskkill en lugar de pkill. Las dobles barras // previenen el path-conversion de MSYS2.
           taskkill //F //IM kubectl.exe || true
           
           echo "✅ Entorno limpiado para la próxima ejecución."
