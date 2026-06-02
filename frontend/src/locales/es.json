@@ -151,6 +151,8 @@
     "err_required": "Por favor, complete todos los campos requeridos.",
     "err_dni_length": "El DNI debe tener 8 dígitos.",
     "err_age": "El ciudadano debe ser mayor de edad (18+ años) para ser empadronado.",
+    "err_age_max": "El ciudadano no puede tener más de 100 años para ser empadronado.",
+    "info_age_optional": "El usuario registrado no está obligado a emitir su voto.",
     "err_location": "Debe seleccionar departamento, provincia y distrito para residentes en Perú.",
     "country": "País de Residencia",
     "dni": "Número de DNI",

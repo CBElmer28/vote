@@ -152,6 +152,8 @@
     "err_required": "Please fill in all required fields.",
     "err_dni_length": "The ID must have 8 digits.",
     "err_age": "The citizen must be of legal age (18+ years) to be registered.",
+    "err_age_max": "The citizen cannot be over 100 years old to be registered.",
+    "info_age_optional": "The registered user is not obligated to cast their vote.",
     "err_location": "You must select department, province, and district for residents in Peru.",
     "country": "Country of Residence",
     "dni": "ID Number",
