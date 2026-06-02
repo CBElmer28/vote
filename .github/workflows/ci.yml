@@ -1,4 +1,4 @@
-name: K8s E2E Chaos Engineering
+name: K8s E2E Chaos Engineering (Self-Hosted)
 
 on:
   push:
@@ -8,24 +8,40 @@ on:
 
 jobs:
   build-deploy-test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted # <-- Apunta directamente a tu PC
+    
+    # Volvemos a la configuración limpia y simple
+    defaults:
+      run:
+        shell: bash
+
     steps:
+      # NUEVO PASO 0: Engañamos al sistema para que encuentre Git Bash ANTES que WSL
+      - name: 🔧 Priorizar Git Bash sobre WSL
+        shell: powershell
+        run: Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files\Git\bin"
+
       - name: 📥 Descargar código
         uses: actions/checkout@v4
 
-      - name: 🐍 Configurar Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      # NUEVO PASO: Sanity Check para asegurar que el entorno Windows tiene todo
+      - name: 🔍 Verificar Entorno Windows (Fail-Fast)
+        run: |
+          echo "Verificando dependencias en el PATH de Windows..."
+          python --version || { echo "❌ Python no encontrado"; exit 1; }
+          pip --version || { echo "❌ Pip no encontrado"; exit 1; }
+          node --version || { echo "❌ Node no encontrado"; exit 1; }
+          docker --version || { echo "❌ Docker no encontrado"; exit 1; }
+          kind --version || { echo "❌ KinD no encontrado"; exit 1; }
 
       - name: ☸️ Crear clúster efímero de Kubernetes (KinD)
-        uses: helm/kind-action@v1.10.0
-        with:
-          cluster_name: ci-cluster
+        run: |
+          echo "Creando clúster KinD de forma nativa..."
+          kind create cluster --name ci-cluster
 
       - name: 🐳 Construir imágenes Docker
         run: |
-          echo "Construyendo microservicios..."
+          echo "Construyendo microservicios (Usará caché local de tu PC)..."
           docker build -t votesystem-frontend:latest ./frontend
           docker build -t votesystem-gateway:latest ./services/gateway
           docker build -t votesystem-ms-usuarios:latest ./services/ms_usuarios
@@ -45,7 +61,7 @@ jobs:
           kind load docker-image votesystem-ms-analisis:latest --name ci-cluster
           kind load docker-image votesystem-ms-candidatos:latest --name ci-cluster
 
-      - name: 🚀 Desplegar Infraestructura de Base de Datos (PXC)
+      - name: 🚀 Desplegar Infraestructura de Base de Datos Real (PXC)
         run: |
           kubectl create namespace prod-db
           kubectl apply -f k8s/secrets.yaml -n prod-db
@@ -54,32 +70,32 @@ jobs:
             -l app.kubernetes.io/name=percona-xtradb-cluster-operator \
             -n prod-db --timeout=120s
 
-          # Desplegar el clúster directamente con 3 nodos
-          kubectl apply -f k8s/percona/ci-percona.yaml -n prod-db
+          # 🔥 ADIÓS A LOS HACKS: Desplegamos tu clúster ORIGINAL de producción
+          kubectl apply -f k8s/percona/percona-cluster.yaml -n prod-db
           kubectl apply -f k8s/db-service.yaml
 
-          echo "⏳ Esperando a que el Operador haga el bootstrap y sincronice el clúster (puede tardar unos minutos)..."
-          
-          for pod in pxc-0 pxc-1 pxc-2; do
-            echo "  Esperando votesystem-db-${pod}..."
-            until kubectl get pod votesystem-db-${pod} -n prod-db &>/dev/null; do
-              sleep 5
-            done
-            
-            if ! kubectl wait --for=condition=ready pod/votesystem-db-${pod} -n prod-db --timeout=300s; then
-              echo "❌ TIMEOUT en ${pod}."
-              kubectl logs votesystem-db-${pod} -c pxc -n prod-db --tail=50 || true
-              exit 1
-            fi
-            echo "  ✅ votesystem-db-${pod} Ready."
+          # --- NUEVO: Bucle para evadir la Condición de Carrera ---
+          echo "⏳ Dando tiempo al Operador Percona para registrar y crear el primer pod..."
+          until kubectl get pod votesystem-db-pxc-0 -n prod-db &>/dev/null; do
+            sleep 3
           done
+          # --------------------------------------------------------
+
+          echo "⏳ Esperando que el clúster Galera alcance el quórum de 3 nodos (Puede tardar 4-6 mins)..."
+          # Ahora el wait no fallará porque el pod ya existe, simplemente esperará a que esté Ready
+          if ! kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=pxc -n prod-db --timeout=600s; then
+            echo "❌ Fallo al levantar PXC. Autopsia del pod 0:"
+            kubectl describe pod votesystem-db-pxc-0 -n prod-db | grep -A 20 "Events:" || true
+            kubectl logs votesystem-db-pxc-0 -c pxc -n prod-db --tail=50 || true
+            exit 1
+          fi
 
           echo "⏳ Esperando HAProxy..."
           kubectl wait --for=condition=ready pod \
             -l app.kubernetes.io/component=haproxy \
             -n prod-db --timeout=120s
 
-          echo "✅ Clúster PXC 3 nodos listo."
+          echo "✅ Clúster Percona Full listo."
       - name: 🚀 Desplegar Microservicios y Gateway
         run: |
           kubectl apply -f k8s/ms-usuarios.yaml
@@ -90,26 +106,43 @@ jobs:
           kubectl apply -f k8s/gateway.yaml
           kubectl apply -f k8s/frontend.yaml
           
-          echo "Esperando microservicios y gateway..."
+          echo "Esperando Gateway..."
           kubectl wait --for=condition=ready pod -l app=gateway --timeout=120s
-          kubectl wait --for=condition=ready pod -l app=ms-votacion --timeout=120s
           
+          echo "Esperando MS Votacion..."
+          # FIX: Bucle de autopsia y aumento de timeout a 180s (3 minutos)
+          if ! kubectl wait --for=condition=ready pod -l app=ms-votacion --timeout=180s; then
+            echo "❌ TIMEOUT: ms-votacion nunca alcanzó el estado Ready. Debugging info:"
+            echo "--- ESTADO DE LOS PODS (DEFAULT NAMESPACE) ---"
+            kubectl get pods
+            
+            echo "--- EVENTOS DE MS-VOTACION ---"
+            kubectl describe pod -l app=ms-votacion | grep -A 20 "Events:" || true
+            
+            echo "--- LOGS DE MS-VOTACION (Crash report) ---"
+            # Extraemos los logs directamente del deployment para ver el error de Python/Flask
+            kubectl logs deployment/ms-votacion --tail=100 || true
+            exit 1
+          fi
+          
+          echo "✅ Todos los microservicios y Gateway están listos."
       - name: 🔌 Inicializar Port-Forwarding
         run: |
           kubectl port-forward svc/gateway-service 80:80 > /dev/null 2>&1 &
-          sleep 5
-          # Verificación rápida
-          curl -I http://localhost:80/api/usuarios/health || echo "Gateway no responde"
+          echo "Esperando estabilización del socket de red..."
+          sleep 10
+          curl -s -I http://localhost:80/api/usuarios/health || echo "⚠️ Gateway no responde en el primer chequeo."
 
       - name: 🧪 Ejecutar Orquestador de Pruebas (Full Suite)
         run: |
-          # Asegurar dependencias de prueba
           pip install -r requirements-test.txt
           
-          # Dependencias de frontend
-          cd frontend && npm ci && npx playwright install chromium --with-deps && cd ..
+          # Evitamos problemas de rutas en Windows con npm y playwright
+          cd frontend
+          npm ci
+          npx playwright install chromium # Retirado --with-deps para evitar warnings en Windows
+          cd ..
           
-          # Ejecutar orquestador
           python run_tests_and_report.py
 
       - name: 📊 Subir Reportes a GitHub
@@ -122,20 +155,32 @@ jobs:
             test_report.csv
             
       - name: 📡 Enviar Reporte CSV a AWS n8n
-        if: always() # Garantiza que se envíe incluso si fallaron algunos tests
+        if: always()
         run: |
-          echo "Enviando test_report.csv a n8n en AWS..."
-          
-          # Utilizamos curl para hacer un POST multipart/form-data
-          # Pasamos el archivo directamente con el prefijo '@'
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-            -F "file=@test_report.csv" \
-            -H "Authorization: Bearer ${{ secrets.N8N_WEBHOOK_SECRET }}" \
-            https://n8n.elmerdev.com/webhook-test/414d9481-3616-4783-b6c3-33703f2d4488)
-          
-          if [ "$HTTP_STATUS" -eq 200 ]; then
-            echo "✅ Reporte enviado exitosamente a n8n."
-          else
-            echo "❌ Fallo al enviar el reporte. HTTP Status: $HTTP_STATUS"
-            exit 1
+          if [ -f "test_report.csv" ]; then
+            echo "Enviando test_report.csv a n8n..."
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+              -F "file=@test_report.csv" \
+              -H "Authorization: Bearer ${{ secrets.N8N_WEBHOOK_SECRET }}" \
+              https://n8n.elmerdev.com/webhook/414d9481-3616-4783-b6c3-33703f2d4488)
+            
+            if [ "$HTTP_STATUS" -eq 200 ]; then
+              echo "✅ Reporte enviado exitosamente a n8n."
+            else
+              echo "❌ Fallo al enviar el reporte. HTTP Status: $HTTP_STATUS"
+              exit 1
+            fi
           fi
+
+      # 🧹 EL PASO MÁS IMPORTANTE PARA MÁQUINAS PERSISTENTES
+      - name: 🧹 Recolector de Basura (Clean Up)
+        if: always()
+        run: |
+          echo "Destruyendo el clúster KinD..."
+          kind delete cluster --name ci-cluster || true
+          
+          echo "Matando Port-Forwarding en Windows..."
+          # Windows usa taskkill en lugar de pkill. Las dobles barras // previenen el path-conversion de MSYS2.
+          taskkill //F //IM kubectl.exe || true
+          
+          echo "✅ Entorno limpiado para la próxima ejecución."
