@@ -9,12 +9,18 @@ on:
 jobs:
   build-deploy-test:
     runs-on: self-hosted # <-- Apunta directamente a tu PC
-
+    
+    # Volvemos a la configuración limpia y simple
     defaults:
       run:
-        shell: 'C:\Program Files\Git\bin\bash.exe --noprofile --norc -e -o pipefail {0}'
+        shell: bash
 
     steps:
+      # NUEVO PASO 0: Engañamos al sistema para que encuentre Git Bash ANTES que WSL
+      - name: 🔧 Priorizar Git Bash sobre WSL
+        shell: powershell
+        run: Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files\Git\bin"
+
       - name: 📥 Descargar código
         uses: actions/checkout@v4
 
