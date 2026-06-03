@@ -107,25 +107,33 @@ jobs:
           kubectl apply -f k8s/frontend.yaml
           
           echo "Esperando Gateway..."
-          kubectl wait --for=condition=ready pod -l app=gateway --timeout=120s
-          
-          echo "Esperando MS Votacion..."
-          # FIX: Bucle de autopsia y aumento de timeout a 180s (3 minutos)
-          if ! kubectl wait --for=condition=ready pod -l app=ms-votacion --timeout=180s; then
-            echo "❌ TIMEOUT: ms-votacion nunca alcanzó el estado Ready. Debugging info:"
+          # FIX: Bucle de autopsia específico para el Gateway
+          if ! kubectl wait --for=condition=ready pod -l app=gateway --timeout=120s; then
+            echo "❌ TIMEOUT: gateway nunca alcanzó el estado Ready. Debugging info:"
             echo "--- ESTADO DE LOS PODS (DEFAULT NAMESPACE) ---"
             kubectl get pods
-            
+            echo "--- EVENTOS DEL GATEWAY ---"
+            kubectl describe pod -l app=gateway | grep -A 20 "Events:" || true
+            echo "--- LOGS DEL GATEWAY (Nginx Crash Report) ---"
+            kubectl logs deployment/gateway --tail=100 || true
+            exit 1
+          fi
+          
+          echo "Esperando MS Votacion..."
+          # Bucle de autopsia para el microservicio principal
+          if ! kubectl wait --for=condition=ready pod -l app=ms-votacion --timeout=180s; then
+            echo "❌ TIMEOUT: ms-votacion nunca alcanzó el estado Ready. Debugging info:"
+            echo "--- ESTADO DE LOS PODS ---"
+            kubectl get pods
             echo "--- EVENTOS DE MS-VOTACION ---"
             kubectl describe pod -l app=ms-votacion | grep -A 20 "Events:" || true
-            
             echo "--- LOGS DE MS-VOTACION (Crash report) ---"
-            # Extraemos los logs directamente del deployment para ver el error de Python/Flask
             kubectl logs deployment/ms-votacion --tail=100 || true
             exit 1
           fi
           
           echo "✅ Todos los microservicios y Gateway están listos."
+          
       - name: 🔌 Inicializar Port-Forwarding
         run: |
           kubectl port-forward svc/gateway-service 80:80 > /dev/null 2>&1 &
