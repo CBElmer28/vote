@@ -182,27 +182,27 @@ jobs:
           # Túnel 2: Frontend (React/Vite)
           kubectl port-forward svc/frontend-service 3000:3000 -n default > /dev/null 2>&1 &
           
-          echo "⏳ Esperando 10 segundos para la estabilización de los sockets en Windows..."
-          sleep 10
+          echo "⏳ Esperando 15 segundos para la estabilización de los sockets en Windows..."
+          sleep 15
           
           echo "🔍 Verificando conexiones locales:"
-          curl -s -I http://localhost:80/api/usuarios/health | head -n 1 || echo "⚠️ Gateway no responde."
-          curl -s -I http://localhost:3000/ | head -n 1 || echo "⚠️ Frontend no responde."
+          curl -s -I http://localhost:80/api/usuarios/health | head -n 1 || echo "Gateway no responde."
+          curl -s -I http://localhost:3000/ | head -n 1 || echo "Frontend no responde."
 
       - name: 🧪 Ejecutar Orquestador de Pruebas (Full Suite)
         run: |
           echo "=== 🔍 DIAGNÓSTICO PROFUNDO DE PYTHON ==="
           echo "1. ¿Dónde está el ejecutable real que usa GitHub Actions?"
-          python -c "import sys; print('Ejecutable Python:', sys.executable)"
+          python -c "import sys; print('Ejecutable Python: ' + sys.executable)"
           
           echo "2. ¿Dónde está el Pip real?"
           python -m pip --version
           
           echo "3. ¿Qué sabe Pip sobre Kubernetes?"
-          python -m pip show kubernetes || echo "❌ PIP NO VE KUBERNETES EN ESTE ENTORNO"
+          python -m pip show kubernetes || echo "PIP NO VE KUBERNETES EN ESTE ENTORNO"
           
           echo "4. ¿Puede Python importarlo?"
-          python -c "import kubernetes; print('✅ Módulo importado desde:', kubernetes.__file__)" || echo "❌ FALLO AL IMPORTAR KUBERNETES"
+          python -c "import kubernetes; print('Modulo importado desde: ' + kubernetes.__file__)" || echo "FALLO AL IMPORTAR KUBERNETES"
           echo "==========================================="
           
           echo "Asegurando dependencias en el entorno correcto..."
@@ -218,10 +218,16 @@ jobs:
           python run_tests_and_report.py
 
       - name: 🚨 Autopsia de MS-Usuarios (Solo si fallan los tests)
-        if: failure()  # Este paso solo se ejecuta si el orquestador de arriba falla
+        if: failure() 
         run: |
-          echo "Los tests fallaron. Extrayendo logs del microservicio de usuarios..."
-          kubectl logs deployment/ms-usuarios --tail=150
+          echo "=== ESTADO DE LOS PODS ==="
+          kubectl get pods
+          
+          echo "=== EVENTOS DEL POD (La verdadera razón del atasco) ==="
+          kubectl describe pod -l app=ms-usuarios | grep -A 30 "Events:"
+          
+          echo "=== LOGS (Solo si logró arrancar) ==="
+          kubectl logs deployment/ms-usuarios --tail=150 || echo "El contenedor no arrancó, no hay logs disponibles."
 
       - name: 📊 Subir Reportes a GitHub
         if: always()
@@ -243,9 +249,9 @@ jobs:
               https://n8n.elmerdev.com/webhook/414d9481-3616-4783-b6c3-33703f2d4488)
             
             if [ "$HTTP_STATUS" -eq 200 ]; then
-              echo "✅ Reporte enviado exitosamente a n8n."
+              echo "Reporte enviado exitosamente a n8n."
             else
-              echo "❌ Fallo al enviar el reporte. HTTP Status: $HTTP_STATUS"
+              echo "Fallo al enviar el reporte. HTTP Status: $HTTP_STATUS"
               exit 1
             fi
           fi
@@ -261,4 +267,4 @@ jobs:
           # Windows usa taskkill en lugar de pkill. Las dobles barras // previenen el path-conversion de MSYS2.
           taskkill //F //IM kubectl.exe || true
           
-          echo "✅ Entorno limpiado para la próxima ejecución."
+          echo "Entorno limpiado para la próxima ejecución."
