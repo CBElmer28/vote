@@ -96,6 +96,21 @@ jobs:
             -n prod-db --timeout=120s
 
           echo "✅ Clúster Percona Full listo."
+
+      - name: ⚙️ Inicializar Base de Datos y Usuario (App DB)
+        run: |
+          echo "Extrayendo contraseña root del secreto..."
+          # Utilizamos la clave especificada en tu documentación
+          ROOT_PASS=$(kubectl get secret mysql-secrets -n prod-db -o jsonpath='{.data.mysql-root-password}' | base64 --decode)
+          
+          echo "Creando base de datos y concediendo permisos a voteuser..."
+          kubectl exec votesystem-db-pxc-0 -n prod-db -c pxc -- mysql -uroot -p"$ROOT_PASS" -e \
+            "CREATE DATABASE IF NOT EXISTS votesystem; \
+             CREATE USER IF NOT EXISTS 'voteuser'@'%' IDENTIFIED BY 'votepassword'; \
+             GRANT ALL PRIVILEGES ON votesystem.* TO 'voteuser'@'%'; \
+             FLUSH PRIVILEGES;"
+          
+          echo "✅ Base de datos inicializada correctamente."
       - name: 🚀 Desplegar Microservicios y Gateway
         run: |
           kubectl apply -f k8s/ms-usuarios.yaml
