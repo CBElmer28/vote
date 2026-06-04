@@ -34,10 +34,23 @@ jobs:
           docker --version || { echo "❌ Docker no encontrado"; exit 1; }
           kind --version || { echo "❌ KinD no encontrado"; exit 1; }
 
+      - name: 🧹 Limpiar clúster Kubernetes Docker Desktop (Evitar Conflictos)
+        run: |
+          echo "Cambiando al contexto docker-desktop para asegurar la limpieza..."
+          kubectl config use-context docker-desktop || true
+          echo "Limpiando recursos existentes en docker-desktop si está activo..."
+          kubectl delete namespace prod-db --ignore-not-found=true --timeout=60s || true
+          kubectl delete namespace monitoring --ignore-not-found=true --timeout=60s || true
+          kubectl delete deployment,service,configmap,secret,statefulset,pvc,ingress --all -n default --timeout=60s || true
+
       - name: ☸️ Crear clúster efímero de Kubernetes (KinD)
         run: |
           echo "Creando clúster KinD de forma nativa..."
           kind create cluster --name ci-cluster
+          echo "Asegurando el cambio de contexto al clúster KinD..."
+          kubectl config use-context kind-ci-cluster
+          echo "Contexto activo actual:"
+          kubectl config current-context
 
       - name: 🐳 Construir imágenes Docker
         run: |
@@ -264,8 +277,21 @@ jobs:
           echo "Destruyendo el clúster KinD..."
           kind delete cluster --name ci-cluster || true
           
+          echo "Restaurando contexto de Kubernetes a docker-desktop..."
+          kubectl config use-context docker-desktop || true
+          kubectl config delete-context kind-ci-cluster || true
+          kubectl config delete-cluster kind-ci-cluster || true
+          kubectl config delete-user kind-ci-cluster || true
+          
           echo "Matando Port-Forwarding en Windows..."
           # Windows usa taskkill en lugar de pkill. Las dobles barras // previenen el path-conversion de MSYS2.
           taskkill //F //IM kubectl.exe || true
           
-          echo "Entorno limpiado para la próxima ejecución."
+          echo "Eliminando imágenes Docker de prueba..."
+          docker rmi votesystem-frontend:latest votesystem-gateway:latest votesystem-ms-usuarios:latest votesystem-ms-votacion:latest votesystem-ms-biometrico:latest votesystem-ms-analisis:latest votesystem-ms-candidatos:latest --force || true
+          docker image prune -f || true
+          
+          echo "Eliminando archivos temporales de reportes locales..."
+          rm -f test_report.json test_report.csv tests_integration_report.xml || true
+          
+          echo "✅ Entorno limpiado para la próxima ejecución."

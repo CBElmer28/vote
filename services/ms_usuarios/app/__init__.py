@@ -21,13 +21,12 @@ limiter = Limiter(
 def create_app(test_config=None):
     app = Flask(__name__)
     metrics = PrometheusMetrics(app)
+    app.config["RATELIMIT_ENABLED"] = os.getenv("RATELIMIT_ENABLED", "True") == "True"
+
     if test_config:
         app.config.update(test_config)
     else:
         app.config.from_object(get_config())
-
-    is_rate_limit_enabled = os.getenv("RATELIMIT_ENABLED", "True") == "True"
-    app.config["RATELIMIT_ENABLED"] = is_rate_limit_enabled
 
     CORS(app)
     from werkzeug.middleware.proxy_fix import ProxyFix
