@@ -189,8 +189,23 @@ jobs:
           curl -s -I http://localhost:80/api/usuarios/health | head -n 1 || echo "Gateway no responde."
           curl -s -I http://localhost:3000/ | head -n 1 || echo "Frontend no responde."
 
+      - name: ⏳ Esperar estabilización de Microservicios
+        run: |
+          echo "Dando tiempo a que los contenedores pasen de ContainerCreating a Running..."
+          
+          # Espera a que todos los microservicios estén en estado Ready
+          kubectl wait --for=condition=ready pod -l app=ms-usuarios --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=ms-biometrico --timeout=120s
+          kubectl wait --for=condition=ready pod -l app=ms-votacion --timeout=120s
+          
+          echo "✅ Todos los pods están corriendo. Vía libre para los tests."
+
       - name: 🧪 Ejecutar Orquestador de Pruebas (Full Suite)
         run: |
+
+          echo "Asegurando dependencias en el entorno correcto..."
+          python -m pip install -r requirements-test.txt
+          
           echo "=== 🔍 DIAGNÓSTICO PROFUNDO DE PYTHON ==="
           echo "1. ¿Dónde está el ejecutable real que usa GitHub Actions?"
           python -c "import sys; print('Ejecutable Python: ' + sys.executable)"
@@ -205,14 +220,11 @@ jobs:
           python -c "import kubernetes; print('Modulo importado desde: ' + kubernetes.__file__)" || echo "FALLO AL IMPORTAR KUBERNETES"
           echo "==========================================="
           
-          echo "Asegurando dependencias en el entorno correcto..."
-          python -m pip install -r requirements-test.txt
-          python -m pip install kubernetes
-          
+
           # Evitamos problemas de rutas en Windows con npm y playwright
           cd frontend
           npm ci
-          npx playwright install chromium # Retirado --with-deps para evitar warnings en Windows
+          npx playwright install chromium 
           cd ..
           
           python run_tests_and_report.py
