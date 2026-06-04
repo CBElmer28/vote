@@ -143,6 +143,16 @@ jobs:
             kubectl logs deployment/gateway --tail=100 || true
             exit 1
           fi
+
+          echo "Esperando MS Usuarios..."
+          # --- NUEVA TRAMPA DE LOGS PARA MS-USUARIOS ---
+          if ! kubectl wait --for=condition=ready pod -l app=ms-usuarios --timeout=60s; then
+            echo "❌ TIMEOUT: ms-usuarios falló al arrancar. Debugging info:"
+            kubectl describe pod -l app=ms-usuarios | grep -A 20 "Events:" || true
+            echo "--- LOGS DE MS-USUARIOS (Crash report) ---"
+            kubectl logs deployment/ms-usuarios --tail=100 || true
+            exit 1
+          fi
           
           echo "Esperando MS Votacion..."
           # Bucle de autopsia para el microservicio principal
