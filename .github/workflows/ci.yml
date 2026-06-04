@@ -120,6 +120,9 @@ jobs:
         run: |
           kubectl apply -f k8s/ms-usuarios.yaml
 
+          echo "Esperando a que ms-usuarios aplique la nueva variable y esté Ready..."
+          kubectl rollout status deployment/ms-usuarios --timeout=120s
+          
           kubectl apply -f k8s/ms-biometrico.yaml
           kubectl apply -f k8s/ms-candidatos.yaml
           kubectl apply -f k8s/ms-votacion.yaml
@@ -213,7 +216,7 @@ jobs:
           cd ..
           
           python run_tests_and_report.py
-          
+
       - name: 🚨 Autopsia de MS-Usuarios (Solo si fallan los tests)
         if: failure()  # Este paso solo se ejecuta si el orquestador de arriba falla
         run: |
