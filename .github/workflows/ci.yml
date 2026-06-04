@@ -123,6 +123,9 @@ jobs:
           echo "Apagando el Rate Limiter en ms-usuarios para las pruebas del pipeline..."
           kubectl set env deployment/ms-usuarios RATELIMIT_ENABLED="False"
 
+          echo "Esperando a que ms-usuarios aplique la nueva variable y esté Ready..."
+          kubectl rollout status deployment/ms-usuarios --timeout=120s
+          
           kubectl apply -f k8s/ms-biometrico.yaml
           kubectl apply -f k8s/ms-candidatos.yaml
           kubectl apply -f k8s/ms-votacion.yaml
@@ -192,6 +195,7 @@ jobs:
       - name: 🧪 Ejecutar Orquestador de Pruebas (Full Suite)
         run: |
           pip install -r requirements-test.txt
+          pip install kubernetes
           
           # Evitamos problemas de rutas en Windows con npm y playwright
           cd frontend
