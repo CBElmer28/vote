@@ -28,7 +28,7 @@ spec:
             - name: FLASK_DEBUG
               value: "0"
             - name: RATELIMIT_ENABLED
-              value: "False"
+              value: "True"
             - name: DB_HOST
               value: votesystem-db
             - name: DB_PORT
