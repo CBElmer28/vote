@@ -119,9 +119,6 @@ jobs:
       - name: 🚀 Desplegar Microservicios y Gateway
         run: |
           kubectl apply -f k8s/ms-usuarios.yaml
-          
-          echo "Apagando el Rate Limiter en ms-usuarios para las pruebas del pipeline..."
-          kubectl set env deployment/ms-usuarios RATELIMIT_ENABLED="False"
 
           kubectl apply -f k8s/ms-biometrico.yaml
           kubectl apply -f k8s/ms-candidatos.yaml
@@ -191,7 +188,23 @@ jobs:
 
       - name: 🧪 Ejecutar Orquestador de Pruebas (Full Suite)
         run: |
-          pip install -r requirements-test.txt
+          echo "=== 🔍 DIAGNÓSTICO PROFUNDO DE PYTHON ==="
+          echo "1. ¿Dónde está el ejecutable real que usa GitHub Actions?"
+          python -c "import sys; print('Ejecutable Python:', sys.executable)"
+          
+          echo "2. ¿Dónde está el Pip real?"
+          python -m pip --version
+          
+          echo "3. ¿Qué sabe Pip sobre Kubernetes?"
+          python -m pip show kubernetes || echo "❌ PIP NO VE KUBERNETES EN ESTE ENTORNO"
+          
+          echo "4. ¿Puede Python importarlo?"
+          python -c "import kubernetes; print('✅ Módulo importado desde:', kubernetes.__file__)" || echo "❌ FALLO AL IMPORTAR KUBERNETES"
+          echo "==========================================="
+          
+          echo "Asegurando dependencias en el entorno correcto..."
+          python -m pip install -r requirements-test.txt
+          python -m pip install kubernetes
           
           # Evitamos problemas de rutas en Windows con npm y playwright
           cd frontend
@@ -200,6 +213,12 @@ jobs:
           cd ..
           
           python run_tests_and_report.py
+          
+      - name: 🚨 Autopsia de MS-Usuarios (Solo si fallan los tests)
+        if: failure()  # Este paso solo se ejecuta si el orquestador de arriba falla
+        run: |
+          echo "Los tests fallaron. Extrayendo logs del microservicio de usuarios..."
+          kubectl logs deployment/ms-usuarios --tail=150
 
       - name: 📊 Subir Reportes a GitHub
         if: always()
