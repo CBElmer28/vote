@@ -194,8 +194,7 @@ jobs:
 
       - name: 🧪 Ejecutar Orquestador de Pruebas (Full Suite)
         run: |
-          pip install -r requirements-test.txt
-          pip install kubernetes
+          python -m pip install -r requirements-test.txt
           
           # Evitamos problemas de rutas en Windows con npm y playwright
           cd frontend
