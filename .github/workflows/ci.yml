@@ -174,9 +174,13 @@ jobs:
             exit 1
           fi
           
+          echo "Seeding default roles in database..."
+          kubectl exec votesystem-db-pxc-0 -n prod-db -c pxc -- bash -c \
+            "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -e \"INSERT INTO votesystem.roles (id, name, description) VALUES (1, 'ADMIN', 'Administrator'), (2, 'VOTER', 'Voter') ON DUPLICATE KEY UPDATE name=name;\""
+
           echo "✅ Todos los microservicios y Gateway están listos."
-          
-      - name: 🔌 Inicializar Port-Forwarding
+
+      - name: 🧪 Ejecutar Orquestador de Pruebas (Full Suite)
         run: |
           echo "Abriendo túneles de red (Port-Forwarding)..."
           # Túnel 1: Backend
@@ -191,15 +195,13 @@ jobs:
           echo "🔍 Verificando conexiones locales:"
           curl -s -I http://localhost:80/api/usuarios/health | head -n 1 || echo "⚠️ Gateway no responde."
           curl -s -I http://localhost:3000/ | head -n 1 || echo "⚠️ Frontend no responde."
-
-      - name: 🧪 Ejecutar Orquestador de Pruebas (Full Suite)
-        run: |
+          
           python -m pip install -r requirements-test.txt
           
           # Evitamos problemas de rutas en Windows con npm y playwright
           cd frontend
           npm ci
-          npx playwright install chromium # Retirado --with-deps para evitar warnings en Windows
+          npx playwright install chromium
           cd ..
           
           python run_tests_and_report.py
