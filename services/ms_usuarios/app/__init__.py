@@ -1,3 +1,4 @@
+import os 
 from flask import Flask
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -10,12 +11,12 @@ from flask_limiter.util import get_remote_address
 from flask import request
 
 db = SQLAlchemy()
-limiter = Limiter(
-    """ key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://", """
-)
 
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
 
 def create_app(test_config=None):
     app = Flask(__name__)
@@ -24,6 +25,9 @@ def create_app(test_config=None):
         app.config.update(test_config)
     else:
         app.config.from_object(get_config())
+
+    is_rate_limit_enabled = os.getenv("RATELIMIT_ENABLED", "True") == "True"
+    app.config["RATELIMIT_ENABLED"] = is_rate_limit_enabled
 
     CORS(app)
     from werkzeug.middleware.proxy_fix import ProxyFix
@@ -36,11 +40,9 @@ def create_app(test_config=None):
     def exempt_metrics():
         return request.path == "/metrics" or request.path == "/api/usuarios/health"
 
-    # Registrar blueprints (controladores)
     from app.controllers.usuario_controller import usuario_bp
     app.register_blueprint(usuario_bp, url_prefix="/api/usuarios")
 
-    # Crear tablas si no existen
     with app.app_context():
         db.create_all()
 

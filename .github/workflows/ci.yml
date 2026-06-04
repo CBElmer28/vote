@@ -119,6 +119,10 @@ jobs:
       - name: 🚀 Desplegar Microservicios y Gateway
         run: |
           kubectl apply -f k8s/ms-usuarios.yaml
+          
+          echo "Apagando el Rate Limiter en ms-usuarios para las pruebas del pipeline..."
+          kubectl set env deployment/ms-usuarios RATELIMIT_ENABLED="False"
+
           kubectl apply -f k8s/ms-biometrico.yaml
           kubectl apply -f k8s/ms-candidatos.yaml
           kubectl apply -f k8s/ms-votacion.yaml
