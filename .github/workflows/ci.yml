@@ -107,7 +107,15 @@ jobs:
             "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -e \"CREATE DATABASE IF NOT EXISTS votesystem; CREATE USER IF NOT EXISTS 'voteuser'@'%' IDENTIFIED BY 'votepassword'; GRANT ALL PRIVILEGES ON votesystem.* TO 'voteuser'@'%'; FLUSH PRIVILEGES;\""
           
           echo "✅ Base de datos inicializada correctamente."
-          
+
+      - name: 🔐 Crear Secretos de AWS para MS-Biométrico
+        run: |
+          echo "Inyectando credenciales de AWS Rekognition..."
+          kubectl create secret generic aws-secrets \
+            --from-literal=aws-access-key-id="${{ secrets.AWS_ACCESS_KEY_ID }}" \
+            --from-literal=aws-secret-access-key="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+            --namespace default
+            
       - name: 🚀 Desplegar Microservicios y Gateway
         run: |
           kubectl apply -f k8s/ms-usuarios.yaml
@@ -115,6 +123,11 @@ jobs:
           kubectl apply -f k8s/ms-candidatos.yaml
           kubectl apply -f k8s/ms-votacion.yaml
           kubectl apply -f k8s/ms-analisis.yaml
+
+          echo "Creando servicio fantasma de Grafana para satisfacer el DNS de Nginx..."
+          kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create service clusterip prometheus-grafana --tcp=80:80 -n monitoring --dry-run=client -o yaml | kubectl apply -f -
+          
           kubectl apply -f k8s/gateway.yaml
           kubectl apply -f k8s/frontend.yaml
           
