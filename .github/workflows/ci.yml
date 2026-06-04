@@ -161,10 +161,19 @@ jobs:
           
       - name: 🔌 Inicializar Port-Forwarding
         run: |
-          kubectl port-forward svc/gateway-service 80:80 > /dev/null 2>&1 &
-          echo "Esperando estabilización del socket de red..."
+          echo "Abriendo túneles de red (Port-Forwarding)..."
+          # Túnel 1: Backend
+          kubectl port-forward svc/gateway-service 80:80 -n default > /dev/null 2>&1 &
+          
+          # Túnel 2: Frontend (React/Vite)
+          kubectl port-forward svc/frontend-service 3000:3000 -n default > /dev/null 2>&1 &
+          
+          echo "⏳ Esperando 10 segundos para la estabilización de los sockets en Windows..."
           sleep 10
-          curl -s -I http://localhost:80/api/usuarios/health || echo "⚠️ Gateway no responde en el primer chequeo."
+          
+          echo "🔍 Verificando conexiones locales:"
+          curl -s -I http://localhost:80/api/usuarios/health | head -n 1 || echo "⚠️ Gateway no responde."
+          curl -s -I http://localhost:3000/ | head -n 1 || echo "⚠️ Frontend no responde."
 
       - name: 🧪 Ejecutar Orquestador de Pruebas (Full Suite)
         run: |
