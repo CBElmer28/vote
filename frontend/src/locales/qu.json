@@ -152,6 +152,8 @@
     "err_required": "Ama hina kaspa, llapallan mañakuykunata hunt'ay.",
     "err_dni_length": "DNI yupayqa 8 kananchis.",
     "err_age": "Llaqtarunaqa 18 watayuqñam kananchis qillqakunanpaq.",
+    "err_age_max": "Llaqtarunaqa manam pachak (100) watamanta mastachu kanan qillqakunanpaq.",
+    "info_age_optional": "Qillqasqa llaqtarunaqa manam kamachisqachu kashan votananpaq.",
     "err_location": "Región, provincia hinaspa distritota akllanaykim.",
     "country": "May llaqtapi tiyasqan",
     "dni": "DNI Yupay",

@@ -35,6 +35,7 @@ export default function Register({ inDashboard = false }) {
   });
 
   const [error, setError] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [fingerprintPreview, setFingerprintPreview] = useState(null);
@@ -47,6 +48,39 @@ export default function Register({ inDashboard = false }) {
   const isPeru = formData.country_residence === 'Perú';
   const availableProvinces = provincesData.filter(p => p.id_depa === formData.department_id);
   const availableDistricts = districtsData.filter(d => d.id_prov === formData.province_id);
+
+  const calculateAge = (dobString) => {
+    if (!dobString) return 0;
+    const today = new Date();
+    const birthDate = new Date(dobString);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  useEffect(() => {
+    if (formData.dob) {
+      const age = calculateAge(formData.dob);
+      if (age > 100) {
+        setError(t('register.err_age_max'));
+        setInfoMessage('');
+      } else if (age >= 70 && age <= 100) {
+        setInfoMessage(t('register.info_age_optional'));
+        setError('');
+      } else if (age < 18) {
+        setError(t('register.err_age'));
+        setInfoMessage('');
+      } else {
+        setInfoMessage('');
+        setError('');
+      }
+    } else {
+      setInfoMessage('');
+    }
+  }, [formData.dob, t]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -71,18 +105,6 @@ export default function Register({ inDashboard = false }) {
     }));
   };
 
-  const calculateAge = (dobString) => {
-    if (!dobString) return 0;
-    const today = new Date();
-    const birthDate = new Date(dobString);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age;
-  };
-
   const nextStep = () => {
     setError('');
     if (step === 1) {
@@ -97,6 +119,10 @@ export default function Register({ inDashboard = false }) {
       const age = calculateAge(formData.dob);
       if (age < 18) {
         setError(t('register.err_age'));
+        return;
+      }
+      if (age > 100) {
+        setError(t('register.err_age_max'));
         return;
       }
     }
@@ -192,6 +218,8 @@ export default function Register({ inDashboard = false }) {
     });
     setStep(1);
     setSuccess(false);
+    setError('');
+    setInfoMessage('');
     setPhotoUrl(null);
   };
 
@@ -243,6 +271,12 @@ export default function Register({ inDashboard = false }) {
           {error && (
             <div className="animate-fade-in mb-8 p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm flex items-center gap-3 font-medium">
               <AlertCircle size={18} /> {error}
+            </div>
+          )}
+
+          {infoMessage && (
+            <div className="animate-fade-in mb-8 p-4 rounded-xl bg-blue-50 border border-blue-100 text-blue-800 text-sm flex items-center gap-3 font-medium">
+              <CheckCircle size={18} className="text-blue-500" /> {infoMessage}
             </div>
           )}
 

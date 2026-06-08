@@ -4,3 +4,4 @@ requests>=2.31.0
 pyjwt>=2.8.0
 docker>=7.0.0
 locust>=2.24.0
+kubernetes>=36.0.1

@@ -1,0 +1,302 @@
+name: K8s E2E Chaos Engineering (Self-Hosted)
+
+on:
+  push:
+    branches: [ "main", "develop", "alternative" ]
+  pull_request:
+    branches: [ "main", "develop", "alternative" ]
+
+jobs:
+  build-deploy-test:
+    runs-on: self-hosted # <-- Apunta directamente a tu PC
+    
+    # Volvemos a la configuración limpia y simple
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      # NUEVO PASO 0: Engañamos al sistema para que encuentre Git Bash ANTES que WSL
+      - name: 🔧 Priorizar Git Bash sobre WSL
+        shell: powershell
+        run: Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files\Git\bin"
+
+      - name: 📥 Descargar código
+        uses: actions/checkout@v4
+
+      # NUEVO PASO: Sanity Check para asegurar que el entorno Windows tiene todo
+      - name: 🔍 Verificar Entorno Windows (Fail-Fast)
+        run: |
+          echo "Verificando dependencias en el PATH de Windows..."
+          python --version || { echo "❌ Python no encontrado"; exit 1; }
+          pip --version || { echo "❌ Pip no encontrado"; exit 1; }
+          node --version || { echo "❌ Node no encontrado"; exit 1; }
+          docker --version || { echo "❌ Docker no encontrado"; exit 1; }
+          kind --version || { echo "❌ KinD no encontrado"; exit 1; }
+
+      - name: 🧹 Limpiar clúster Kubernetes Docker Desktop (Evitar Conflictos)
+        run: |
+          echo "Cambiando al contexto docker-desktop para asegurar la limpieza..."
+          kubectl config use-context docker-desktop || true
+          echo "Limpiando recursos existentes en docker-desktop si está activo..."
+          kubectl delete namespace prod-db --ignore-not-found=true --timeout=60s || true
+          kubectl delete namespace monitoring --ignore-not-found=true --timeout=60s || true
+          kubectl delete deployment,service,configmap,secret,statefulset,pvc,ingress --all -n default --timeout=60s || true
+
+      - name: ☸️ Crear clúster efímero de Kubernetes (KinD)
+        run: |
+          echo "Creando clúster KinD de forma nativa..."
+          kind create cluster --name ci-cluster
+          echo "Asegurando el cambio de contexto al clúster KinD..."
+          kubectl config use-context kind-ci-cluster
+          echo "Contexto activo actual:"
+          kubectl config current-context
+
+      - name: 🐳 Construir imágenes Docker
+        run: |
+          echo "Construyendo microservicios (Usará caché local de tu PC)..."
+          docker build -t votesystem-frontend:latest ./frontend
+          docker build -t votesystem-gateway:latest ./services/gateway
+          docker build -t votesystem-ms-usuarios:latest ./services/ms_usuarios
+          docker build -t votesystem-ms-votacion:latest ./services/ms_votacion
+          docker build -t votesystem-ms-biometrico:latest ./services/ms_biometrico
+          docker build -t votesystem-ms-analisis:latest ./services/ms_analisis
+          docker build -t votesystem-ms-candidatos:latest ./services/ms_candidatos
+
+      - name: 📦 Cargar imágenes dentro del clúster KinD
+        run: |
+          echo "Inyectando imágenes al containerd de KinD..."
+          kind load docker-image votesystem-frontend:latest --name ci-cluster
+          kind load docker-image votesystem-gateway:latest --name ci-cluster
+          kind load docker-image votesystem-ms-usuarios:latest --name ci-cluster
+          kind load docker-image votesystem-ms-votacion:latest --name ci-cluster
+          kind load docker-image votesystem-ms-biometrico:latest --name ci-cluster
+          kind load docker-image votesystem-ms-analisis:latest --name ci-cluster
+          kind load docker-image votesystem-ms-candidatos:latest --name ci-cluster
+
+      - name: 🚀 Desplegar Infraestructura de Base de Datos Real (PXC)
+        run: |
+          kubectl create namespace prod-db
+          kubectl apply -f k8s/secrets.yaml -n prod-db
+          kubectl apply -f k8s/percona/percona-operator.yaml -n prod-db
+          kubectl wait --for=condition=ready pod \
+            -l app.kubernetes.io/name=percona-xtradb-cluster-operator \
+            -n prod-db --timeout=120s
+
+          # 🔥 ADIÓS A LOS HACKS: Desplegamos tu clúster ORIGINAL de producción
+          kubectl apply -f k8s/percona/percona-cluster.yaml -n prod-db
+          kubectl apply -f k8s/db-service.yaml
+
+          # --- NUEVO: Bucle para evadir la Condición de Carrera ---
+          echo "⏳ Dando tiempo al Operador Percona para registrar y crear el primer pod..."
+          until kubectl get pod votesystem-db-pxc-0 -n prod-db &>/dev/null; do
+            sleep 3
+          done
+          # --------------------------------------------------------
+
+          echo "⏳ Esperando que el clúster Galera alcance el quórum de 3 nodos (Puede tardar 4-6 mins)..."
+          # Ahora el wait no fallará porque el pod ya existe, simplemente esperará a que esté Ready
+          if ! kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=pxc -n prod-db --timeout=600s; then
+            echo "❌ Fallo al levantar PXC. Autopsia del pod 0:"
+            kubectl describe pod votesystem-db-pxc-0 -n prod-db | grep -A 20 "Events:" || true
+            kubectl logs votesystem-db-pxc-0 -c pxc -n prod-db --tail=50 || true
+            exit 1
+          fi
+
+          echo "⏳ Esperando HAProxy..."
+          kubectl wait --for=condition=ready pod \
+            -l app.kubernetes.io/component=haproxy \
+            -n prod-db --timeout=120s
+
+          echo "✅ Clúster Percona Full listo."
+
+      - name: ⚙️ Inicializar Base de Datos y Usuario (App DB)
+        run: |
+          echo "Inicializando base de datos usando variables de entorno internas del pod..."
+          
+          # Utilizamos bash -c para que el pod evalúe su propia variable $MYSQL_ROOT_PASSWORD
+
+          kubectl exec votesystem-db-pxc-0 -n prod-db -c pxc -- bash -c \
+            "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -e \"CREATE DATABASE IF NOT EXISTS votesystem; CREATE USER IF NOT EXISTS 'voteuser'@'%' IDENTIFIED BY 'votepassword'; GRANT ALL PRIVILEGES ON votesystem.* TO 'voteuser'@'%'; FLUSH PRIVILEGES;\""
+          
+          echo "✅ Base de datos inicializada correctamente."
+
+      - name: 🔐 Crear Secretos de AWS para MS-Biométrico
+        run: |
+          echo "Inyectando credenciales de AWS Rekognition..."
+          kubectl create secret generic aws-secrets \
+            --from-literal=aws-access-key-id="${{ secrets.AWS_ACCESS_KEY_ID }}" \
+            --from-literal=aws-secret-access-key="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+            --namespace default
+            
+      - name: 🚀 Desplegar Microservicios y Gateway
+        run: |
+          kubectl apply -f k8s/ms-usuarios.yaml
+
+          echo "Esperando a que ms-usuarios aplique la nueva variable y esté Ready..."
+          kubectl rollout status deployment/ms-usuarios --timeout=120s
+          
+          kubectl apply -f k8s/ms-biometrico.yaml
+          kubectl apply -f k8s/ms-candidatos.yaml
+          kubectl apply -f k8s/ms-votacion.yaml
+          kubectl apply -f k8s/ms-analisis.yaml
+
+          echo "Creando servicio fantasma de Grafana para satisfacer el DNS de Nginx..."
+          kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create service clusterip prometheus-grafana --tcp=80:80 -n monitoring --dry-run=client -o yaml | kubectl apply -f -
+          
+          kubectl apply -f k8s/gateway.yaml
+          kubectl apply -f k8s/frontend.yaml
+          
+          echo "Esperando Gateway..."
+          # FIX: Bucle de autopsia específico para el Gateway
+          if ! kubectl wait --for=condition=ready pod -l app=gateway --timeout=120s; then
+            echo "❌ TIMEOUT: gateway nunca alcanzó el estado Ready. Debugging info:"
+            echo "--- ESTADO DE LOS PODS (DEFAULT NAMESPACE) ---"
+            kubectl get pods
+            echo "--- EVENTOS DEL GATEWAY ---"
+            kubectl describe pod -l app=gateway | grep -A 20 "Events:" || true
+            echo "--- LOGS DEL GATEWAY (Nginx Crash Report) ---"
+            kubectl logs deployment/gateway --tail=100 || true
+            exit 1
+          fi
+
+          echo "Esperando MS Usuarios..."
+          # --- NUEVA TRAMPA DE LOGS PARA MS-USUARIOS ---
+          if ! kubectl wait --for=condition=ready pod -l app=ms-usuarios --timeout=60s; then
+            echo "❌ TIMEOUT: ms-usuarios falló al arrancar. Debugging info:"
+            kubectl describe pod -l app=ms-usuarios | grep -A 20 "Events:" || true
+            echo "--- LOGS DE MS-USUARIOS (Crash report) ---"
+            kubectl logs deployment/ms-usuarios --tail=100 || true
+            exit 1
+          fi
+          
+          echo "Esperando MS Votacion..."
+          # Bucle de autopsia para el microservicio principal
+          if ! kubectl wait --for=condition=ready pod -l app=ms-votacion --timeout=180s; then
+            echo "❌ TIMEOUT: ms-votacion nunca alcanzó el estado Ready. Debugging info:"
+            echo "--- ESTADO DE LOS PODS ---"
+            kubectl get pods
+            echo "--- EVENTOS DE MS-VOTACION ---"
+            kubectl describe pod -l app=ms-votacion | grep -A 20 "Events:" || true
+            echo "--- LOGS DE MS-VOTACION (Crash report) ---"
+            kubectl logs deployment/ms-votacion --tail=100 || true
+            exit 1
+          fi
+          
+          echo "Seeding default roles in database..."
+          kubectl exec votesystem-db-pxc-0 -n prod-db -c pxc -- bash -c \
+            "mysql -uroot -p\$MYSQL_ROOT_PASSWORD -e \"INSERT INTO votesystem.roles (id, name, description) VALUES (1, 'ADMIN', 'Administrator'), (2, 'VOTER', 'Voter') ON DUPLICATE KEY UPDATE name=name;\""
+
+          echo "✅ Todos los microservicios y Gateway están listos."
+
+      - name: 🧪 Ejecutar Orquestador de Pruebas (Full Suite)
+        run: |
+          echo "Abriendo túneles de red (Port-Forwarding)..."
+          # Túnel 1: Backend
+          kubectl port-forward svc/gateway-service 80:80 -n default > /dev/null 2>&1 &
+          
+          # Túnel 2: Frontend (React/Vite)
+          kubectl port-forward svc/frontend-service 3000:3000 -n default > /dev/null 2>&1 &
+          
+          echo "⏳ Esperando 15 segundos para la estabilización de los sockets en Windows..."
+          sleep 15
+          
+          echo "🔍 Verificando conexiones locales:"
+          curl -s -I http://localhost:80/api/usuarios/health | head -n 1 || echo "⚠️ Gateway no responde."
+          curl -s -I http://localhost:3000/ | head -n 1 || echo "⚠️ Frontend no responde."
+          
+          python -m pip install -r requirements-test.txt
+          
+          echo "=== 🔍 DIAGNÓSTICO PROFUNDO DE PYTHON ==="
+          echo "1. ¿Dónde está el ejecutable real que usa GitHub Actions?"
+          python -c "import sys; print('Ejecutable Python: ' + sys.executable)"
+          
+          echo "2. ¿Dónde está el Pip real?"
+          python -m pip --version
+          
+          echo "3. ¿Qué sabe Pip sobre Kubernetes?"
+          python -m pip show kubernetes || echo "PIP NO VE KUBERNETES EN ESTE ENTORNO"
+          
+          echo "4. ¿Puede Python importarlo?"
+          python -c "import kubernetes; print('Modulo importado desde: ' + kubernetes.__file__)" || echo "FALLO AL IMPORTAR KUBERNETES"
+          echo "==========================================="
+          
+
+          # Evitamos problemas de rutas en Windows con npm y playwright
+          cd frontend
+          npm ci
+          npx playwright install chromium
+          cd ..
+          
+          python run_tests_and_report.py
+
+      - name: 🚨 Autopsia de MS-Usuarios (Solo si fallan los tests)
+        if: failure() 
+        run: |
+          echo "=== ESTADO DE LOS PODS ==="
+          kubectl get pods
+          
+          echo "=== EVENTOS DEL POD (La verdadera razón del atasco) ==="
+          kubectl describe pod -l app=ms-usuarios | grep -A 30 "Events:"
+          
+          echo "=== LOGS (Solo si logró arrancar) ==="
+          kubectl logs deployment/ms-usuarios --tail=150 || echo "El contenedor no arrancó, no hay logs disponibles."
+
+      - name: 📊 Subir Reportes a GitHub
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-stack-test-reports
+          path: |
+            test_report.json
+            test_report.csv
+            
+      - name: 📡 Enviar Reporte CSV a AWS n8n
+        if: always()
+        run: |
+          if [ -f "test_report.csv" ]; then
+            echo "Enviando test_report.csv a n8n..."
+  
+            # Usamos la variable inyectada de GitHub Secrets
+            HTTP_STATUS=$(curl -s -w "%{http_code}" -o n8n_response.txt -X POST \
+              -F "file=@test_report.csv" \
+              -H "Authorization: ${{ secrets.N8N_WEBHOOK_SECRET }}" \
+              -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+              https://n8n.elmerdev.com/webhook/414d9481-3616-4783-b6c3-33703f2d4488)
+  
+            if [ "$HTTP_STATUS" -eq 200 ]; then
+              echo "✅ Reporte enviado exitosamente a n8n."
+            else
+              echo "❌ Fallo al enviar el reporte. HTTP Status: $HTTP_STATUS"
+              echo "Motivo del rechazo:"
+              cat n8n_response.txt
+              exit 1
+            fi
+          fi
+
+      # 🧹 EL PASO MÁS IMPORTANTE PARA MÁQUINAS PERSISTENTES
+      - name: 🧹 Recolector de Basura (Clean Up)
+        if: always()
+        run: |
+          echo "Destruyendo el clúster KinD..."
+          kind delete cluster --name ci-cluster || true
+          
+          echo "Restaurando contexto de Kubernetes a docker-desktop..."
+          kubectl config use-context docker-desktop || true
+          kubectl config delete-context kind-ci-cluster || true
+          kubectl config delete-cluster kind-ci-cluster || true
+          kubectl config delete-user kind-ci-cluster || true
+          
+          echo "Matando Port-Forwarding en Windows..."
+          # Windows usa taskkill en lugar de pkill. Las dobles barras // previenen el path-conversion de MSYS2.
+          taskkill //F //IM kubectl.exe || true
+          
+          echo "Eliminando imágenes Docker de prueba..."
+          docker rmi votesystem-frontend:latest votesystem-gateway:latest votesystem-ms-usuarios:latest votesystem-ms-votacion:latest votesystem-ms-biometrico:latest votesystem-ms-analisis:latest votesystem-ms-candidatos:latest --force || true
+          docker image prune -f || true
+          
+          echo "Eliminando archivos temporales de reportes locales..."
+          rm -f test_report.json test_report.csv tests_integration_report.xml || true
+          
+          echo "✅ Entorno limpiado para la próxima ejecución."

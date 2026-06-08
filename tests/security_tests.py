@@ -25,6 +25,7 @@ def run_security_tests():
     log("\n[Test 1] Validando Rate Limiting en Login (Fuerza Bruta)...", Colors.YELLOW)
     endpoint_login = f"{API_GATEWAY}/api/usuarios/auth/login"
     
+    start_t = time.time()
     # El limite en el controlador es "10 per minute"
     # Dado que ms-usuarios esta escalado a 3 replicas con limitador in-memory,
     # incrementamos a 35 peticiones para forzar a que al menos una replica alcance el limite (10) y retorne 429.
@@ -38,10 +39,11 @@ def run_security_tests():
         else:
             log(f"  - Peticion {i+1}: Fallida normal (401).")
             
+    elapsed = time.time() - start_t
     if rate_limit_triggered:
-        log("  [EXITO] El sistema previno el ataque de fuerza bruta.", Colors.GREEN)
+        log(f"  [EXITO] El sistema previno el ataque de fuerza bruta. ({elapsed:.3f}s)", Colors.GREEN)
     else:
-        log("  [FALLO] El sistema NO bloqueo las peticiones masivas (Esperaba 429).", Colors.RED)
+        log(f"  [FALLO] El sistema NO bloqueo las peticiones masivas (Esperaba 429). ({elapsed:.3f}s)", Colors.RED)
 
 
     # IMPORTANTE: Esperamos para que el Limiter expire, o usamos un endpoint distinto
@@ -53,6 +55,7 @@ def run_security_tests():
     # ---------------------------------------------------------
     log("\n[Test 2] Validando Evasion de Inyeccion SQL (SQLi)...", Colors.YELLOW)
     
+    start_t = time.time()
     # Intentamos inyectar SQL en la busqueda por DNI o Email
     sqli_payloads = [
         "12345678' OR '1'='1",
@@ -65,16 +68,19 @@ def run_security_tests():
         # Probamos el endpoint de busqueda por dni
         res = requests.get(f"{API_GATEWAY}/api/usuarios/by-dni/{payload}")
         if res.status_code == 200:
-             log(f"  [FALLO CRITICO] SQLi posible con payload DNI: {payload}", Colors.RED)
+             elapsed = time.time() - start_t
+             log(f"  [FALLO CRITICO] SQLi posible con payload DNI: {payload} ({elapsed:.3f}s)", Colors.RED)
              sqli_success = False
         elif res.status_code == 500:
-             log(f"  [FALLO] Excepcion no controlada en BD con payload DNI: {payload}", Colors.RED)
+             elapsed = time.time() - start_t
+             log(f"  [FALLO] Excepcion no controlada en BD con payload DNI: {payload} ({elapsed:.3f}s)", Colors.RED)
              sqli_success = False
         else:
              log(f"  - Payload rechazado (Status {res.status_code}): {payload}")
 
     if sqli_success:
-        log("  [EXITO] SQLAlchemy/ORM sanitizo correctamente los payloads de SQLi.", Colors.GREEN)
+        elapsed = time.time() - start_t
+        log(f"  [EXITO] SQLAlchemy/ORM sanitizo correctamente los payloads de SQLi. ({elapsed:.3f}s)", Colors.GREEN)
 
     # ---------------------------------------------------------
     # TEST 3: JWT Manipulation (OWASP A01)
@@ -82,6 +88,7 @@ def run_security_tests():
     log("\n[Test 3] Validando Falsificacion de Tokens (JWT Manipulation)...", Colors.YELLOW)
     endpoint_me = f"{API_GATEWAY}/api/usuarios/auth/me"
     
+    start_t = time.time()
     # 3.1 Token falso/inventado
     fake_token = jwt.encode({"sub": 1, "role": "admin"}, "falsa_contraseña", algorithm="HS256")
     headers = {"Authorization": f"Bearer {fake_token}"}
@@ -89,7 +96,8 @@ def run_security_tests():
     if res.status_code in [401, 403]:
         log("  - Token con firma incorrecta fue RECHAZADO.")
     else:
-        log(f"  [FALLO] Token falso fue aceptado. (Status {res.status_code})", Colors.RED)
+        elapsed = time.time() - start_t
+        log(f"  [FALLO] Token falso fue aceptado. (Status {res.status_code}) ({elapsed:.3f}s)", Colors.RED)
         
     # 3.2 Token "alg: none" (Vulnerabilidad clasica)
     # Algunos JWT antiguos aceptaban tokens sin firmar si el header decia "alg: none"
@@ -104,17 +112,19 @@ def run_security_tests():
     headers_none = {"Authorization": f"Bearer {token_none}"}
     
     res = requests.get(endpoint_me, headers=headers_none)
+    elapsed = time.time() - start_t
     if res.status_code in [401, 403]:
         log("  - Token 'alg: none' fue RECHAZADO.")
-        log("  [EXITO] Validacion estricta de JWT comprobada.", Colors.GREEN)
+        log(f"  [EXITO] Validacion estricta de JWT comprobada. ({elapsed:.3f}s)", Colors.GREEN)
     else:
-        log(f"  [FALLO] Token 'alg: none' fue aceptado. Vulnerabilidad grave. (Status {res.status_code})", Colors.RED)
+        log(f"  [FALLO] Token 'alg: none' fue aceptado. Vulnerabilidad grave. (Status {res.status_code}) ({elapsed:.3f}s)", Colors.RED)
 
     # ---------------------------------------------------------
     # TEST 4: Cross-Site Scripting (XSS) via API (OWASP A03)
     # ---------------------------------------------------------
     log("\n[Test 4] Validando rechazo/sanitizacion de XSS...", Colors.YELLOW)
     
+    start_t = time.time()
     xss_payload = "<script>alert('XSS')</script>"
     # Lo enviaremos en un intento de registro
     register_data = {
@@ -130,25 +140,26 @@ def run_security_tests():
     # Usualmente, Pydantic/Validadores deberían rebotar caracteres especiales en nombres.
     res = requests.post(f"{API_GATEWAY}/api/usuarios/", json=register_data)
     
+    elapsed = time.time() - start_t
     if res.status_code in [422, 400]:
         log(f"  - Payload XSS rechazado en la validacion (Status {res.status_code}).")
-        log("  [EXITO] Proteccion XSS preventiva funciona.", Colors.GREEN)
+        log(f"  [EXITO] Proteccion XSS preventiva funciona. ({elapsed:.3f}s)", Colors.GREEN)
     elif res.status_code == 201:
         # Check if the returned data was sanitized (tags stripped by bleach)
         returned_user = res.json().get("data", {})
         first_name = returned_user.get("first_name", "")
         if "script" not in first_name and "<" not in first_name:
             log(f"  - El backend acepto el registro pero sanitizo la cadena: {first_name}")
-            log("  [EXITO] Sanitizacion XSS activa (Bleach).", Colors.GREEN)
+            log(f"  [EXITO] Sanitizacion XSS activa (Bleach). ({elapsed:.3f}s)", Colors.GREEN)
             
             # Limpiar usuario de prueba
             user_id = returned_user.get("id")
             if user_id:
                  requests.delete(f"{API_GATEWAY}/api/usuarios/{user_id}")
         else:
-            log(f"  [FALLO CRITICO] XSS no fue sanitizado: {first_name}", Colors.RED)
+            log(f"  [FALLO CRITICO] XSS no fue sanitizado: {first_name} ({elapsed:.3f}s)", Colors.RED)
     else:
-        log(f"  [ADVERTENCIA] Respuesta inesperada al payload XSS (Status {res.status_code}).", Colors.YELLOW)
+        log(f"  [ADVERTENCIA] Respuesta inesperada al payload XSS (Status {res.status_code}). ({elapsed:.3f}s)", Colors.YELLOW)
         
     log("\nPruebas de Seguridad finalizadas.", Colors.GREEN)
 
